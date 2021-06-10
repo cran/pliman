@@ -20,6 +20,9 @@
 #' @param img_template A color palette of the template areas.
 #' @param area_template The known area of the template. The leaf area will be
 #'   given in the same unit as `area_template`.
+#' @param resize Resize the image before processing? Defaults to `FALSE`. Use a
+#'   numeric value of range 0-100 (proportion of the size of the original
+#'   image).
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `img_pattern` is used is informed. The
@@ -57,7 +60,7 @@
 #' @return A data frame with the results for each image.
 #' @export
 #' @md
-#' @importFrom graphics text par points
+#' @importFrom graphics text par points rect
 #' @examples
 #' \donttest{
 #' library(pliman)
@@ -85,6 +88,7 @@ leaf_area <- function(img,
                       img_background,
                       img_template,
                       area_template,
+                      resize = FALSE,
                       parallel = FALSE,
                       workers = NULL,
                       img_pattern = NULL,
@@ -125,10 +129,13 @@ leaf_area <- function(img,
       if(is.character(img)){
         all_files <- sapply(list.files(diretorio_original), file_name)
         check_names_dir(img, all_files, diretorio_original)
-        imag <- list.files(diretorio_original, pattern = img)
+        imag <- list.files(diretorio_original, pattern = paste0("^",img, "\\."))
         name_ori <- file_name(imag)
         extens_ori <- file_extension(imag)
         img <- image_import(paste(diretorio_original, "/", name_ori, ".", extens_ori, sep = ""))
+        if(resize != FALSE){
+          img <- image_resize(img, resize)
+        }
       } else{
         name_ori <- match.call()[[2]]
         extens_ori <- "jpg"
@@ -140,6 +147,9 @@ leaf_area <- function(img,
         name <- file_name(imag)
         extens <- file_extension(imag)
         img_leaf <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
+        if(resize != FALSE){
+          img_leaf <- image_resize(img_leaf, resize)
+        }
       }
       if(is.character(img_template)){
         all_files <- sapply(list.files(diretorio_original), file_name)
@@ -148,6 +158,9 @@ leaf_area <- function(img,
         name <- file_name(imag)
         extens <- file_extension(imag)
         img_template <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
+        if(resize != FALSE){
+          img_template <- image_resize(img_template, resize)
+        }
       }
       if(is.character(img_background)){
         all_files <- sapply(list.files(diretorio_original), file_name)
@@ -156,6 +169,9 @@ leaf_area <- function(img,
         name <- file_name(imag)
         extens <- file_extension(imag)
         img_background <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
+        if(resize != FALSE){
+          img_background <- image_resize(img_background, resize)
+        }
       }
       original <- image_to_mat(img)
       leaf <- image_to_mat(img_leaf)
@@ -265,9 +281,10 @@ leaf_area <- function(img,
              cex = text_size)
         dev.off()
       }
-      shape <- shape[,c(1:3, 5:7, 9:10, 8, 11)]
+      shape <- transform(shape, radius_ratio = s.radius.max / s.radius.min)
+      shape <- shape[,c(1:3, 5:7, 9:10, 8, 12, 11)]
       colnames(shape) <- c("id", "x", "y", "area", "perimeter", "radius_mean",
-                           "radius_min", "radius_max", "radius_sd", "label")
+                           "radius_min", "radius_max", "radius_sd", "radius_ratio", "label")
       id_obj <- shape[which(shape$area == area_template),1]
       class(shape) <- c("data.frame", "plm_la", id_obj)
       return(shape)
@@ -320,7 +337,9 @@ leaf_area <- function(img,
       results <- list()
       pb <- progress(max = length(plants), style = 4)
       for (i in 1:length(plants)) {
+        if(verbose == TRUE){
         run_progress(pb, actual = i, text = paste("Processing image", names_plant[i]))
+        }
         results[[i]] <-
           help_area(img  = names_plant[i],
                     img_leaf, img_background, img_template, area_template,
@@ -329,6 +348,12 @@ leaf_area <- function(img,
                     text_size, text_digits, save_image, dir_original, dir_processed)
       }
     }
+    names(results) <- names_plant
+    results <-
+      lapply(1:length(results), function(i){
+      res <- transform(results[[i]], img = names(results[i]))
+      res[,c(ncol(res), 1:(ncol(res)-1))]
+    })
     return(do.call(rbind, results))
   }
 }

@@ -38,6 +38,8 @@
 #'   the background. IMPORTANT: Objects touching each other can be combined into
 #'   one single object, which may underestimate the number of objects in an
 #'   image.
+#' @param filter Performs median filtering after image processing? defaults to
+#'   `FALSE`. See more at [image_filter()].
 #' @param invert Inverts the binary image, if desired. This is useful to process
 #'   images with black background. Defaults to `FALSE`.
 #' @param index,my_index A character value specifying the target mode for
@@ -125,6 +127,7 @@ count_objects <- function(img,
                           workers = NULL,
                           resize = FALSE,
                           fill_hull = FALSE,
+                          filter = FALSE,
                           invert = FALSE,
                           index = "NB",
                           my_index = NULL,
@@ -168,14 +171,14 @@ count_objects <- function(img,
     diretorio_processada <- paste("./", dir_processed, sep = "")
   }
   help_count <-
-    function(img, foreground, background, resize, fill_hull, tolerance, extension,
+    function(img, foreground, background, resize, fill_hull, filter, tolerance, extension,
              randomize, nrows, show_image, show_original, show_background, marker,
              marker_col, marker_size, save_image, prefix,
              dir_original, dir_processed, verbose){
       if(is.character(img)){
         all_files <- sapply(list.files(diretorio_original), file_name)
         check_names_dir(img, all_files, diretorio_original)
-        imag <- list.files(diretorio_original, pattern = img)
+        imag <- list.files(diretorio_original, pattern = paste0("^",img, "\\."))
         name_ori <- file_name(imag)
         extens_ori <- file_extension(imag)
         img <- image_import(paste(diretorio_original, "/", name_ori, ".", extens_ori, sep = ""))
@@ -185,6 +188,9 @@ count_objects <- function(img,
       }
       if(resize != FALSE){
         img <- image_resize(img, resize)
+      }
+      if(filter != FALSE){
+        img <- image_filter(img)
       }
       if(!is.null(foreground) && !is.null(background)){
         if(is.character(foreground)){
@@ -381,8 +387,9 @@ count_objects <- function(img,
                   statistics = c("n", "min", "mean", "max", "sd", "sum"))
       stats <- stats[c(3, 1, 2)]
       shape <- shape[,c(1:6, 8:9, 7)]
+      shape <- transform(shape, radius_ratio = s.radius.max / s.radius.min)
       colnames(shape) <- c("id", "x", "y", "area", "perimeter", "radius_mean",
-                           "radius_min", "radius_max", "radius_sd")
+                           "radius_min", "radius_max", "radius_sd", "radius_ratio")
       results <- list(results = shape,
                       statistics = stats)
       class(results) <- "plm_count"
@@ -396,7 +403,7 @@ count_objects <- function(img,
       invisible(results)
     }
   if(missing(img_pattern)){
-    help_count(img, foreground, background, resize, fill_hull, tolerance , extension, randomize,
+    help_count(img, foreground, background, resize, fill_hull, filter, tolerance , extension, randomize,
                nrows, show_image, show_original, show_background, marker,
                marker_col, marker_size, save_image, prefix,
                dir_original, dir_processed, verbose)
@@ -433,7 +440,7 @@ count_objects <- function(img,
         parLapply(clust, names_plant,
                   function(x){
                     help_count(x,
-                               foreground, background, resize, fill_hull,
+                               foreground, background, resize, fill_hull, filter,
                                tolerance , extension, randomize,
                                nrows, show_image, show_original, show_background, marker,
                                marker_col, marker_size, save_image, prefix,
@@ -444,11 +451,13 @@ count_objects <- function(img,
       results <- list()
       pb <- progress(max = length(plants), style = 4)
       for (i in 1:length(plants)) {
+        if(verbose == TRUE){
         run_progress(pb, actual = i,
                      text = paste("Processing image", names_plant[i]))
+        }
         results[[i]] <-
           help_count(img  = names_plant[i],
-                     foreground, background, resize, fill_hull, tolerance,
+                     foreground, background, resize, fill_hull, filter, tolerance,
                      extension, randomize, nrows, show_image, show_original,
                      show_background, marker, marker_col, marker_size, save_image,
                      prefix, dir_original, dir_processed, verbose)

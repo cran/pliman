@@ -9,9 +9,10 @@
 #' @param object An object computed with [count_objects()] or [leaf_area()].
 #' @param dpi A known resolution of the image in DPI (dots per inch).
 #' @param id An object in the image to indicate a known value.
-#' @param measure  A two-sided formula, e.g., `measure = area ~ 100` indicating
-#'   the known value of object `id`. The right-hand side is the known value and
-#'   the left-hand side can be one of the following.
+#' @param measure For `plot_measures()`, a character string; for
+#'   `get_measures()`, a two-sided formula, e.g., `measure = area ~ 100`
+#'   indicating the known value of object `id`. The right-hand side is the known
+#'   value and the left-hand side can be one of the following.
 #' * `area` The known area of the object.
 #' * `perimeter` The known perimeter of the object.
 #' * `radius_mean` The known radius of the object.
@@ -72,7 +73,8 @@ get_measures <- function(object,
                          id = NULL,
                          measure = NULL,
                          dpi = NULL,
-                         verbose = TRUE){
+                         verbose = TRUE,
+                         digits = 3){
   if(is.data.frame(object)){
     if(any(c("area", "perimeter", "radius_mean") %in% colnames(object) == FALSE)){
       stop("Object informed seems to be not an object computed with pliman.")
@@ -108,7 +110,7 @@ get_measures <- function(object,
     terms <- as.formula(measure)
     var <- as.character(terms[[2]])
     value <- as.numeric(terms[[3]])
-    measures <- c("area", "perimeter", "radius_mean", "radius_min",  "radius_max")
+    measures <- c("area", "perimeter", "radius_mean", "radius_min",  "radius_max", "radius_ratio")
     if(!var %in% measures){
       stop("The left-hand side of 'measure' must be one of ", paste(measures, collapse = ", "), call. = FALSE)
     }
@@ -134,7 +136,11 @@ get_measures <- function(object,
     }
     if(verbose == TRUE){
       cat("-----------------------------------------\n")
-      cat(paste0("measures corrected with:\nobject id: ", id, "\n", var, ": ",  value, "\n"))
+      cat(paste0("measures corrected with:\nobject id: ", id, "\n", var,
+                 "     : ",  value, "\n"))
+      cat("-----------------------------------------\n")
+      cat(paste0("Total    : ", round(sum(res[, var]), 3)), "\n")
+      cat(paste0("Average  : ", round(mean(res[, var]), 3)), "\n")
       cat("-----------------------------------------\n")
     }
   }
@@ -146,7 +152,7 @@ get_measures <- function(object,
     res$radius_min <- res$radius_min / dpc
     res$radius_max <- res$radius_max / dpc
   }
-  res <- res[,1:8]
+  res[,1:10] <- apply(res[,1:10], 2, round, digits)
   class(res) <- c("data.frame", "plm_measures")
   return(res)
 }
@@ -164,11 +170,11 @@ plot_measures <- function(object,
   } else if(class(object) == "plm_count"){
     object <- object$results
   } else if(class(object) == "objects_rgb"){
-    object <- object[["objects"]]
+    object <- cbind(object[["objects"]], index = object$indexes$index)
   } else{
-    stop("a")
+    stop("Object of ivalid class.")
   }
-  measures <- c("id", "area", "perimeter", "radius_mean", "radius_min", "radius_max")
+  measures <- c("id", "area", "perimeter", "radius_mean", "radius_min", "radius_max", "radius_ratio", "index")
   if(!measure %in% measures){
     stop("'measure' must be one of the", paste(measures, collapse = ", "), call. = FALSE)
   }
@@ -179,3 +185,4 @@ plot_measures <- function(object,
        cex = size,
        ...)
 }
+

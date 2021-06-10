@@ -10,6 +10,7 @@ symptomatic_area(
   img_symptoms,
   img_background = NULL,
   img_pattern = NULL,
+  resize = FALSE,
   parallel = FALSE,
   workers = NULL,
   randomize = TRUE,
@@ -42,6 +43,10 @@ matches the pattern (e.g., img1.-, image1.-, im2.-) will be analyzed.
 Providing any number as pattern (e.g., \code{img_pattern = "1"}) will select
 images that are named as 1.-, 2.-, and so on.}
 
+\item{resize}{Resize the image before processing? Defaults to \code{FALSE}. Use a
+numeric value of range 0-100 (proportion of the size of the original
+image).}
+
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time, especially when \code{img_pattern} is used is informed. The
@@ -69,8 +74,8 @@ background is shown by default when \code{show_original = FALSE}.}
 \code{"NULL"}.}
 
 \item{save_image}{Save the image after processing? The image is saved in the
-current working directory named with the prefix provided in \verb{proc_*} where \code{*} is the image name
-given in \code{img}.}
+current working directory named with the prefix provided in \verb{proc_*} where
+\code{*} is the image name given in \code{img}.}
 
 \item{prefix}{The prefix to be included in the processed images. Defaults to
 \code{"proc_"}.}

@@ -9,7 +9,7 @@ image_index(
   image,
   index = NULL,
   my_index = NULL,
-  resize = TRUE,
+  resize = 30,
   re = NULL,
   nir = NULL,
   show_image = TRUE,
@@ -36,8 +36,9 @@ indexes.}
 \item{my_index}{User can calculate a different index using the bands names,
 e.g. \code{my_index = "R+B/G"}.}
 
-\item{resize}{Resize the image before processing? Defaults to \code{TRUE}. Resizes
-the image to 30\% of the original size to speed up image processing.}
+\item{resize}{Resize the image before processing? Defaults to \code{30}, which
+resizes the image to 30\% of the original size to speed up image processing.
+Set \code{resize = FALSE} to keep the original size of the image.}
 
 \item{re}{Respective position of the red-edge band at the original image
 file.}
@@ -87,13 +88,20 @@ The following indexes are available in pliman.\tabular{lll}{
    NR \tab R/(R+G+B) \tab C \cr
    NG \tab G/(R+G+B) \tab C \cr
    NB \tab B/(R+G+B) \tab C \cr
+   GB \tab G/B \tab C \cr
+   RB \tab R/B \tab C \cr
+   GR \tab G/R \tab C \cr
    BI \tab sqrt((R^2+G^2+B^2)/3) \tab C \cr
    BIM \tab sqrt((R\emph{2+G}2+B*2)/3) \tab C \cr
    SCI \tab (R-G)/(R+G) \tab C \cr
    GLI \tab (2\emph{G-R-B)/(2}G+R+B) \tab C \cr
    HI \tab (2*R-G-B)/(G-B) \tab C \cr
-   NGRDI \tab (G-R)/(G+R) \tab C \cr
-   SI \tab (R-B)/(R+B) \tab C \cr
+   NDGRI \tab (G-R)/(G+R) \tab C \cr
+   NDGBI \tab (G-B)/(G+B) \tab C \cr
+   NDRBI \tab (R-B)/(R+B) \tab C \cr
+   I \tab R+G+B \tab C \cr
+   S \tab ((R+G+B)-3*B)/(R+G+B) \tab C \cr
+   L \tab R+G+B/3 \tab C \cr
    VARI \tab (G-R)/(G+R-B) \tab C \cr
    HUE \tab atan(2*(B-G-R)/30.5*(G-R)) \tab C \cr
    HUE2 \tab atan(2*(R-G-R)/30.5*(G-B)) \tab C \cr
