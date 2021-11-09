@@ -6,49 +6,88 @@
 \alias{image_export}
 \alias{image_show}
 \alias{image_pliman}
-\title{Import, display and export images}
+\title{Import and export images}
 \usage{
-image_import(image, ..., img_pattern = NULL)
+image_import(
+  image,
+  ...,
+  pattern = NULL,
+  path = NULL,
+  plot = FALSE,
+  nrow = NULL,
+  ncol = NULL,
+  img_pattern = NULL
+)
 
-image_export(image, name, ...)
+image_export(image, name, extension = NULL, subfolder = NULL, ...)
 
 image_show(image)
 
-image_pliman(image)
+image_pliman(image, plot = FALSE)
 }
 \arguments{
 \item{image}{\itemize{
 \item For \code{image_import()}, a character vector of file names or URLs.
 \item For \code{image_export()}, an Image object, an array or a list of images.
+\item For \code{image_pliman()}, a charactere value specifying the image example. See
+\code{?pliman_images} for more details.
 }}
 
 \item{...}{Alternative arguments passed to the corresponding functions from
 the \code{jpeg}, \code{png}, and \code{tiff} packages.}
 
-\item{img_pattern}{A pattern of file name used to identify images to be
-imported. For example, if \code{img_pattern = "im"} all images in the current
-working directory that the name matches the pattern (e.g., img1.-,
-image1.-, im2.-) will be imported as a list. Providing any number as
-pattern (e.g., \code{img_pattern = "1"}) will select images that are named as
-1.-, 2.-, and so on.}
+\item{pattern}{A pattern of file name used to identify images to be imported.
+For example, if \code{pattern = "im"} all images in the current working
+directory that the name matches the pattern (e.g., img1.-, image1.-, im2.-)
+will be imported as a list. Providing any number as pattern (e.g., \code{pattern = "1"}) will select images that are named as 1.-, 2.-, and so on. An error
+will be returned if the pattern matches any file that is not supported
+(e.g., img1.pdf).}
 
-\item{name}{An string specifying the name of the image.}
+\item{path}{A character vector of full path names; the default corresponds to
+the working directory, \code{\link[=getwd]{getwd()}}. It will overwrite (if given) the path
+informed in \code{image} argument.}
+
+\item{plot}{Plots the image after importing? Defaults to \code{FALSE}.}
+
+\item{nrow, ncol}{Passed on to \code{\link[=image_combine]{image_combine()}}. The number of rows and
+columns to use in the composite image when \code{plot = TRUE}.}
+
+\item{img_pattern}{Deprecated. Use \code{pattern} instead.}
+
+\item{name}{An string specifying the name of the image. It can be either a
+character with the image name (e.g., "img1") or name and extension (e.g.,
+"img1.jpg"). If none file extension is provided, the image will be saved as
+a *.jpg file.}
+
+\item{extension}{When \code{image} is a list, \code{extension} can be used to define
+the extension of exported files. This will overwrite the file extensions
+given in \code{image}.}
+
+\item{subfolder}{Optional character string indicating a subfolder within the
+current working directory to save the image(s). If the folder doesn't
+exist, it will be created.}
 }
 \value{
 \itemize{
 \item \code{image_import()} returns a new \code{Image} object.
 \item \code{image_export()} returns an invisible vector of file names.
-\item \code{image_pliman()} returns a character string with the path to the example
-image installed with the package.
+\item \code{image_pliman()} returns a new \code{Image} object with the example image
+required. If an empty call is used, the path to the \code{tmp_images} directory
+installed with the package is returned.
 }
 }
 \description{
-Import images from files and URLs, write images to files, and show images.
-*
+Import images from files and URLs and write images to files, possibly with
+batch processing.
 }
 \examples{
 library(pliman)
-img <- image_import(image_pliman("sev_leaf.jpg"))
+folder <- image_pliman()
+full_path <- paste0(folder, "/sev_leaf.jpg")
+(path <- file_dir(full_path))
+(file <- basename(full_path))
+image_import(image = full_path)
+image_import(image = file, path = path)
 }
 \author{
 Tiago Olivoto \email{tiagoolivoto@gmail.com}

@@ -3,56 +3,58 @@ knitr::opts_chunk$set(comment = "#", collapse = TRUE, fig.width = 5)
 
 ## -----------------------------------------------------------------------------
 library(pliman)
-img <- image_import(image_pliman("la_pattern.JPG"))
-leaf <- image_import(image_pliman("la_leaf.jpg"))
-tmpl <- image_import(image_pliman("la_temp.jpg"))
-background <- image_import(image_pliman("la_back.jpg"))
-image_combine(img, leaf, tmpl, background)
+leaves <- image_pliman("la_leaves.jpg")
+plot(leaves)
+count <- analyze_objects(leaves, marker = "id")
 
-
-# Computes the leaf area
+## ----leaf6--------------------------------------------------------------------
 area <- 
-leaf_area(img = img,
-          img_leaf = leaf,
-          img_template = tmpl,
-          img_background = background,
-          area_template = 4,
-          text_col = "white")
-get_measures(area)
+  get_measures(count,
+               id = 6,
+               area ~ 4)
+area
+# plot the area to the segmented image
+image_segment(leaves, index = "NB", verbose = FALSE)
+plot_measures(area, measure = "area")
+
 
 ## -----------------------------------------------------------------------------
-soy <- image_import(image_pliman("soybean_touch.jpg"))
-image_show(soy)
+get_measures(count, dpi = 84)
+
+## -----------------------------------------------------------------------------
+soy <- image_pliman("soybean_touch.jpg")
+plot(soy)
 
 # Count the objects in the image
-grains <- count_objects(soy)
+grains <- analyze_objects(soy)
 
 # Draws the object id (by default)
 plot_measures(grains)
 
 ## -----------------------------------------------------------------------------
-img <- image_import(image_pliman("sev_leaf.jpg"))
-healthy <- image_import(image_pliman("sev_healthy.jpg"))
-symptoms <- image_import(image_pliman("sev_sympt.jpg"))
-background <- image_import(image_pliman("sev_back.jpg"))
+img <- image_pliman("sev_leaf.jpg")
+healthy <- image_pliman("sev_healthy.jpg")
+symptoms <- image_pliman("sev_sympt.jpg")
+background <- image_pliman("sev_back.jpg")
 image_combine(img, healthy, symptoms,background)
 
 # Computes the symptomatic area
-symptomatic_area(img = img,
-                 img_healthy = healthy,
-                 img_symptoms = symptoms,
-                 img_background = background,
-                 show_image = TRUE)
+measure_disease(img = img,
+                img_healthy = healthy,
+                img_symptoms = symptoms,
+                img_background = background,
+                show_image = TRUE)
 
 ## -----------------------------------------------------------------------------
-img <- image_import(image_pliman("soy_green.jpg"))
+img <- image_pliman("soy_green.jpg")
 # Segment the foreground (grains) using the normalized blue index
 # Shows the average value of the blue index in each object
-rgb <- objects_rgb(img, marker = "index")
 
-# Draw the object id
-image_show(img)
-plot_measures(rgb)
+rgb <- 
+  analyze_objects(img,
+                  object_index = "B",
+                  marker = "index")
+
 
 # plot the distribution of RGB values of each object
 plot(rgb)

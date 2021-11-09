@@ -7,6 +7,7 @@
 \alias{file_dir}
 \alias{manipulate_files}
 \alias{pliman_indexes}
+\alias{pliman_indexes_eq}
 \title{Utilities for file manipulation}
 \usage{
 file_extension(file)
@@ -21,6 +22,7 @@ manipulate_files(
   prefix = NULL,
   name = NULL,
   suffix = NULL,
+  extension = NULL,
   sep = "",
   save_to = NULL,
   overwrite = FALSE,
@@ -29,6 +31,8 @@ manipulate_files(
 )
 
 pliman_indexes()
+
+pliman_indexes_eq()
 }
 \arguments{
 \item{file}{The file name.}
@@ -46,6 +50,9 @@ Defaults to \code{NULL} (no prefix or suffix).}
 length as the number of files manipulated. If one value is informed, a
 sequential vector of names will be created as "\code{name}_1", "\code{name}_2", and
 so on.}
+
+\item{extension}{The new extension of the file. If not declared (default),
+the original extensions will be used.}
 
 \item{sep}{An optional separator. Defaults to \code{""}.}
 
@@ -81,6 +88,8 @@ attempted.
 (insert prefix or suffix) and save the new files to the same or other provided
 directory.
 \item \code{pliman_indexes()} Get the indexes available in pliman.
+\item \code{pliman_indexes_eq()} Get the equation of the indexes available
+in pliman.
 }
 }
 \examples{

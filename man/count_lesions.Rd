@@ -13,13 +13,14 @@ count_lesions(
   parallel = FALSE,
   workers = NULL,
   resize = FALSE,
+  fill_hull = TRUE,
   invert = FALSE,
   index = "NB",
   my_index = NULL,
   lower_size = NULL,
   upper_size = NULL,
   randomize = TRUE,
-  nrows = 10000,
+  nrows = 3000,
   lesion_size = "medium",
   segment = TRUE,
   tolerance = NULL,
@@ -59,7 +60,7 @@ images that are named as 1.-, 2.-, and so on.}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time, especially when \code{img_pattern} is used is informed. The
-number of sections is set up to 90\% of available cores.}
+number of sections is set up to 70\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
@@ -67,6 +68,10 @@ number of parallel processes that can be active at the same time.}
 \item{resize}{Resize the image before processing? Defaults to \code{FALSE}. Use a
 numeric value of range 0-100 (proportion of the size of the original
 image).}
+
+\item{fill_hull}{Fill holes in the image? Defaults to \code{TRUE}. This is useful
+to fill holes in leaves, e.g., those caused by insect attack, ensuring the
+hole area will be accounted for the leaf, not background.}
 
 \item{invert}{Inverts the binary image, if desired. This is useful to process
 images with black background. Defaults to \code{FALSE}.}
@@ -171,9 +176,9 @@ stored in the current working directory or in the subdirectory informed in
 \examples{
 \donttest{
 library(pliman)
-img <- image_import(image_pliman("sev_leaf_nb.jpg"))
-healthy <- image_import(image_pliman("sev_healthy.jpg"))
-lesions <- image_import(image_pliman("sev_sympt.jpg"))
+img <- image_pliman("sev_leaf_nb.jpg")
+healthy <- image_pliman("sev_healthy.jpg")
+lesions <- image_pliman("sev_sympt.jpg")
 image_combine(img, healthy, lesions, ncol = 3)
 a <-
 count_lesions(img = img,

@@ -51,7 +51,7 @@ image).}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time, especially when \code{img_pattern} is used is informed. The
-number of sections is set up to 90\% of available cores.}
+number of sections is set up to 70\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
@@ -107,36 +107,20 @@ A data frame with the results for each image.
 }
 \description{
 \itemize{
-\item \code{leaf_area ()} Calculates the leaf area using an image with leaves and a
-template with a known area. A general linear model (binomial family) fitted to
-the RGB values is used to first separate the leaves and template from the
-background and then the leaves from the template. The leaf area is then
-calculated for each leaf based on the pixel area. By using \code{img_pattern} it is
-possible to process several images with common pattern names that are stored
-in the current working directory or in the subdirectory informed in
-\code{dir_originals}.
+\item \code{leaf_area ()} is deprecated. use \code{\link[=analyze_objects]{analyze_objects()}} instead.
 }
 }
 \examples{
 \donttest{
+# use analyze_objects() to compute the leaf area.
+
 library(pliman)
-img <- image_import(image_pliman("la_pattern.JPG"))
-leaf <- image_import(image_pliman("la_leaf.jpg"))
-tmpl <- image_import(image_pliman("la_temp.jpg"))
-background <- image_import(image_pliman("la_back.jpg"))
+img <- image_pliman("la_leaves.jpg")
+lef_area <- analyze_objects(img, marker = "id")
 
-# Combine the images
-image_combine(img, leaf, tmpl, background)
-
-# Computes the leaf area
-area <-
-leaf_area(img = img,
-          img_leaf = leaf,
-          img_template = tmpl,
-          img_background = background,
-          area_template = 4,
-          text_col = "white")
-get_measures(area)
+# correct pixel to metric units using the image dpi (~84)
+# the object 6 (leaf square) has a known area of ~ 4 cm2.
+get_measures(lef_area, dpi = 84)
 }
 
 }

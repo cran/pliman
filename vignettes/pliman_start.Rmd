@@ -18,51 +18,62 @@ knitr::opts_chunk$set(comment = "#", collapse = TRUE, fig.width = 5)
 # Getting started
 `pliman` (**pl**ant **im**age **an**alysis) is designed to analyze plant images, especially related to leaf analysis. You provide color palettes, tell `pliman` what each one represents, and it takes care of the details. The package will help you to:
 
-* Measure leaf area with `leaf_area()`.
+* Get object statistics (number, area, perimeter, etc.) with `analyze_objects()`.
 * Measure disease severity with `symptomatic_area()`.
-* Count the number of lesions with `count_lesions()`.
-* Count objects in an image with `count_objects()`.
 * Get the RGB values for each object in an image with `objects_rgb()`.
 * Get object measures with `get_measures()`.
 * Plot objec measures with `plot_measures()`.
 
 
 # Leaf area
-The function `leaf_area()` can be used to computes the leaf area using an image with leaves and a template with a known area. A general linear model (binomial family) fitted to the RGB values is used to first separate the leaves and template from the background and then the leaves from the template. The leaf area is then calculated for each leaf based on the pixel area.
+The function `analyze_objects()` can be used to measure the leaf area in an image. The pixel area can be adjusted to metric units (cm) in two ways: (i) Using an object of known area to correct the measures or (ii) knowing the image resolution in dpi (dots per inch).
 
-In the following example, the area of five three leaves will be computed using a reference template with a known area of 4 cm$^2$.
+To show the first approach, first we count the number of objects and plot an object id using the argument `marker = "text"` of the function `analyze_objects()`. This allows for the further adjustment of the leaf area using the known object, that in this case is the leaf square, with 4 cm$^2$.
+
+
 
 ```{r}
 library(pliman)
-img <- image_import(image_pliman("la_pattern.JPG"))
-leaf <- image_import(image_pliman("la_leaf.jpg"))
-tmpl <- image_import(image_pliman("la_temp.jpg"))
-background <- image_import(image_pliman("la_back.jpg"))
-image_combine(img, leaf, tmpl, background)
-
-
-# Computes the leaf area
-area <- 
-leaf_area(img = img,
-          img_leaf = leaf,
-          img_template = tmpl,
-          img_background = background,
-          area_template = 4,
-          text_col = "white")
-get_measures(area)
+leaves <- image_pliman("la_leaves.jpg")
+plot(leaves)
+count <- analyze_objects(leaves, marker = "id")
 ```
+
+
+- Adjust the leaf area by the area of the known object
+
+The function `get_measures()` is used to adjust the leaf area using object 6.
+
+```{r leaf6}
+area <- 
+  get_measures(count,
+               id = 6,
+               area ~ 4)
+area
+# plot the area to the segmented image
+image_segment(leaves, index = "NB", verbose = FALSE)
+plot_measures(area, measure = "area")
+
+```
+
+
+When the image resolution is known, we can the image dpi (dots per inch) to correct the pixel units given by `analyze_objects()` to metric units. The function `dpi()` can be used to compute the dpi of an image, provided that the size of any object is known. See a brief tutorial [here](https://www.youtube.com/watch?v=Rh10_pLgeng).
+```{r}
+get_measures(count, dpi = 84)
+```
+
 
 
 # Counting crop grains 
 
-Here, we will count the grains in the image `soybean_touch.png`. This image has a cyan background and contains 30 soybean grains that touch with each other.
+Here, we will count the grains in the image `soybean_touch.jpg`. This image has a cyan background and contains 30 soybean grains that touch with each other.
 
 ```{r}
-soy <- image_import(image_pliman("soybean_touch.jpg"))
-image_show(soy)
+soy <- image_pliman("soybean_touch.jpg")
+plot(soy)
 
 # Count the objects in the image
-grains <- count_objects(soy)
+grains <- analyze_objects(soy)
 
 # Draws the object id (by default)
 plot_measures(grains)
@@ -71,23 +82,23 @@ plot_measures(grains)
 
 
 # Disease severity
-The function `symptomatic_area()` is used to compute the percentage of symptomatic leaf area in a sample or entire leaf based on provided color palettes samples. A general linear model (binomial family) fitted to the RGB values is used to segment the lesions from the healthy leaf. If a pallet of background is provided, the function takes care of the details to isolate it before computing the number and area of lesions.
+The function `measure_disease()` is used to compute the percentage of symptomatic leaf area in a sample or entire leaf based on provided color palettes samples. A general linear model (binomial family) fitted to the RGB values is used to segment the lesions from the healthy leaf. If a pallet of background is provided, the function takes care of the details to isolate it before computing the number and area of lesions.
 
 The next example computes the symptomatic area of a soybean leaf. The proportion of the healthy and symptomatic areas is given as the proportion of the total leaf area, after segmenting the leaf from the background (blue).
 
 ```{r}
-img <- image_import(image_pliman("sev_leaf.jpg"))
-healthy <- image_import(image_pliman("sev_healthy.jpg"))
-symptoms <- image_import(image_pliman("sev_sympt.jpg"))
-background <- image_import(image_pliman("sev_back.jpg"))
+img <- image_pliman("sev_leaf.jpg")
+healthy <- image_pliman("sev_healthy.jpg")
+symptoms <- image_pliman("sev_sympt.jpg")
+background <- image_pliman("sev_back.jpg")
 image_combine(img, healthy, symptoms,background)
 
 # Computes the symptomatic area
-symptomatic_area(img = img,
-                 img_healthy = healthy,
-                 img_symptoms = symptoms,
-                 img_background = background,
-                 show_image = TRUE)
+measure_disease(img = img,
+                img_healthy = healthy,
+                img_symptoms = symptoms,
+                img_background = background,
+                show_image = TRUE)
 ```
 
 
@@ -95,14 +106,15 @@ symptomatic_area(img = img,
 The function `objects_rgb()` can be used to get the Red Green and Blue (RGB) for objects in an image. Here, the RGB for 
 
 ```{r}
-img <- image_import(image_pliman("soy_green.jpg"))
+img <- image_pliman("soy_green.jpg")
 # Segment the foreground (grains) using the normalized blue index
 # Shows the average value of the blue index in each object
-rgb <- objects_rgb(img, marker = "index")
 
-# Draw the object id
-image_show(img)
-plot_measures(rgb)
+rgb <- 
+  analyze_objects(img,
+                  object_index = "B",
+                  marker = "index")
+
 
 # plot the distribution of RGB values of each object
 plot(rgb)

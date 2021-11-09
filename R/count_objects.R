@@ -27,7 +27,7 @@
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `img_pattern` is used is informed. The
-#'   number of sections is set up to 90% of available cores.
+#'   number of sections is set up to 70% of available cores.
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param resize Resize the image before processing? Defaults to `FALSE`. Use a
@@ -104,21 +104,18 @@
 #'  * `count` (If `img_pattern` is used), summarizing the count number for each
 #'  image.
 #' @export
-#' @import EBImage
+#' @importFrom  utils install.packages
 #' @md
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
 #' \donttest{
 #' library(pliman)
-#' img <- image_import(image_pliman("soybean_touch.jpg"))
-#' count_objects(img)
+#' ###### deprecated use analyze_objects() instead ############
+#' img <- image_pliman("soybean_touch.jpg")
+#' analyze_objects(img)
 #'
-#' # Enumerate the objects in the original image
-#' count_objects(img,
-#'               show_segmentation = FALSE,
-#'               marker = "text",
-#'               marker_col = "white")
 #' }
+#'
 count_objects <- function(img,
                           foreground = NULL,
                           background = NULL,
@@ -154,6 +151,7 @@ count_objects <- function(img,
                           dir_original = NULL,
                           dir_processed = NULL,
                           verbose = TRUE){
+  stop("'count_objects()' is deprecated as of {pliman} 0.4.0. Use 'analyze_objects()' instead.", call. = FALSE)
   if(!object_size %in% c("small", "medium", "large", "elarge")){
     stop("'object_size' must be one of 'small', 'medium', 'large', or 'elarge'")
   }
@@ -187,7 +185,7 @@ count_objects <- function(img,
         extens_ori <- "png"
       }
       if(resize != FALSE){
-        img <- image_resize(img, resize)
+        img <- EBImage::resize(img, resize)
       }
       if(filter != FALSE){
         img <- image_filter(img)
@@ -230,7 +228,7 @@ count_objects <- function(img,
             eval(parse(text=x))}))
         ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
         tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
-        nmask <- watershed(distmap(foreground_background),
+        nmask <- EBImage::watershed(EBImage::distmap(foreground_background),
                            tolerance = tol,
                            ext = ext)
       } else{
@@ -249,7 +247,7 @@ count_objects <- function(img,
             eval(parse(text=x))}))
         ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
         tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
-        nmask <- watershed(distmap(img2),
+        nmask <- EBImage::watershed(EBImage::distmap(img2),
                            tolerance = tol,
                            ext = ext)
         ID <- which(img2 == 1)
@@ -261,14 +259,14 @@ count_objects <- function(img,
       if(show_original == TRUE & show_segmentation == FALSE){
         im2 <- img
         if(backg){
-          im3 <- colorLabels(nmask)
+          im3 <- EBImage::colorLabels(nmask)
           im2@.Data[,,1][which(im3@.Data[,,1]==0)] <- col_background[1]
           im2@.Data[,,2][which(im3@.Data[,,2]==0)] <- col_background[2]
           im2@.Data[,,3][which(im3@.Data[,,3]==0)] <- col_background[3]
         }
       }
       if(show_original == TRUE & show_segmentation == TRUE){
-        im2 <- colorLabels(nmask)
+        im2 <- EBImage::colorLabels(nmask)
         if(backg){
           im2@.Data[,,1][which(im2@.Data[,,1]==0)] <- col_background[1]
           im2@.Data[,,2][which(im2@.Data[,,2]==0)] <- col_background[2]
@@ -281,7 +279,7 @@ count_objects <- function(img,
       }
       if(show_original == FALSE){
         if(show_segmentation == TRUE){
-          im2 <- colorLabels(nmask)
+          im2 <- EBImage::colorLabels(nmask)
           im2@.Data[,,1][which(im2@.Data[,,1]==0)] <- col_background[1]
           im2@.Data[,,2][which(im2@.Data[,,2]==0)] <- col_background[2]
           im2@.Data[,,3][which(im2@.Data[,,3]==0)] <- col_background[3]
@@ -296,8 +294,8 @@ count_objects <- function(img,
         }
       }
       shape <-
-        cbind(data.frame(computeFeatures.shape(nmask)),
-              data.frame(computeFeatures.moment(nmask))[,1:2]
+        cbind(data.frame(EBImage::computeFeatures.shape(nmask)),
+              data.frame(EBImage::computeFeatures.moment(nmask))[,1:2]
         )
       if(!is.null(lower_size) & !is.null(topn_lower) | !is.null(upper_size) & !is.null(topn_upper)){
         stop("Only one of 'lower_*' or 'topn_*' can be used.")
@@ -322,7 +320,7 @@ count_objects <- function(img,
       marker_size <- ifelse(is.null(marker_size), 0.9, marker_size)
       if(show_image == TRUE){
         if(marker == "text"){
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             text(shape[,2],
                  shape[,3],
@@ -331,7 +329,7 @@ count_objects <- function(img,
                  cex = marker_size)
           }
         } else{
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             points(shape[,2],
                    shape[,3],
@@ -353,7 +351,7 @@ count_objects <- function(img,
             height = dim(im2@.Data)[2])
         if(marker == "text"){
           marker_size <- ifelse(is.null(marker_size), 0.75, marker_size)
-          image_show(im2)
+          plot(im2)
           text(shape[,2],
                shape[,3],
                shape[,1],
@@ -361,7 +359,7 @@ count_objects <- function(img,
                cex = marker_size)
         } else{
           marker_size <- ifelse(is.null(marker_size), 0.75, marker_size)
-          image_show(im2)
+          plot(im2)
           text(shape[,2],
                shape[,3],
                col = marker_col,
@@ -423,13 +421,12 @@ count_objects <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.9), workers)
+      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.7), workers)
       clust <- makeCluster(nworkers)
       clusterExport(clust,
                     varlist = c("names_plant", "help_count", "file_name",
                                 "check_names_dir", "file_extension", "image_import",
-                                "image_binary", "watershed", "distmap", "computeFeatures.moment",
-                                "computeFeatures.shape", "colorLabels", "image_show"),
+                                "image_binary"),
                     envir=environment())
       on.exit(stopCluster(clust))
       if(verbose == TRUE){

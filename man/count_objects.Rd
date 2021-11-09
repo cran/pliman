@@ -58,7 +58,7 @@ images that are named as 1.-, 2.-, and so on.}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time, especially when \code{img_pattern} is used is informed. The
-number of sections is set up to 90\% of available cores.}
+number of sections is set up to 70\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
@@ -183,15 +183,12 @@ one can set \code{parallel = TRUE}.
 \examples{
 \donttest{
 library(pliman)
-img <- image_import(image_pliman("soybean_touch.jpg"))
-count_objects(img)
+###### deprecated use analyze_objects() instead ############
+img <- image_pliman("soybean_touch.jpg")
+analyze_objects(img)
 
-# Enumerate the objects in the original image
-count_objects(img,
-              show_segmentation = FALSE,
-              marker = "text",
-              marker_col = "white")
 }
+
 }
 \author{
 Tiago Olivoto \email{tiagoolivoto@gmail.com}

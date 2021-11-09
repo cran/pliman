@@ -2,12 +2,14 @@
 % Please edit documentation in R/utils_imagem.R
 \name{image_segment}
 \alias{image_segment}
+\alias{image_segment_iter}
 \title{Image segmentation}
 \usage{
 image_segment(
   image,
   index = NULL,
   my_index = NULL,
+  threshold = "Otsu",
   fill_hull = FALSE,
   re = NULL,
   nir = NULL,
@@ -19,18 +21,44 @@ image_segment(
   workers = NULL,
   verbose = TRUE
 )
+
+image_segment_iter(
+  image,
+  nseg = 1,
+  index = NULL,
+  invert = NULL,
+  threshold = NULL,
+  show_image = TRUE,
+  verbose = TRUE,
+  nrow = NULL,
+  ncol = NULL,
+  parallel = FALSE,
+  workers = NULL,
+  ...
+)
 }
 \arguments{
-\item{image}{An image object.}
+\item{image}{An image object or a list of image objects.}
 
-\item{index}{A character value (or a vector of characters) specifying the
-target mode for conversion to binary image. One of the following:  \code{"R"},
-\code{"G"}, \code{"B"} \code{"GR"}, \code{"NR"}, \code{"NG"}, \code{"NB"}, \code{"BI"}, \code{"BIM"}, \code{"SCI"},
-\code{"GLI"}, \code{"HI"}, \code{"NGRDI"}, \code{"SI"}, \code{"VARI"}, \code{"HUE"}, \code{"HUE2"}, \code{"BGI"},
-\code{"BGI"}. See \code{\link[=image_index]{image_index()}} for more details.}
+\item{index}{\itemize{
+\item For \code{image_segment()}, a character value (or a vector of characters)
+specifying the target mode for conversion to binary image. See the available
+indexes with \code{\link[=pliman_indexes]{pliman_indexes()}}.  See \code{\link[=image_index]{image_index()}} for more details.
+\item For \code{image_segment_iter()} a character or a vector of characters with the
+same length of \code{nseg}. It can be either an available index (described above)
+or any operation involving the RGB values (e.g., \code{"B/R+G"}).
+}}
 
 \item{my_index}{User can calculate a different index using the bands names,
 e.g. \code{my_index = "R+B/G"}.}
+
+\item{threshold}{By default (\code{threshold = "Otsu"}), a threshold value based
+on Otsu's method is used to reduce the grayscale image to a binary image.
+If a numeric value is informed, this value will be used as a threshold.
+Inform any non-numeric value different than \code{"Otsu"} to iteratively chosen
+the threshold based on a raster plot showing pixel intensity of the index.
+For \code{image_segmentation_iter()}, use a vector (allows a mixed (numeric and
+character) type) with the same length of \code{nseg}.}
 
 \item{fill_hull}{Fill holes in the objects? Defaults to \code{FALSE}.}
 
@@ -40,7 +68,8 @@ file.}
 \item{nir}{Respective position of the near-infrared band at the original
 image file.}
 
-\item{invert}{Inverts the binary image, if desired.}
+\item{invert}{Inverts the binary image, if desired. For
+\code{image_segmentation_iter()} use a vector with the same length of \code{nseg}.}
 
 \item{show_image}{Show image after processing?}
 
@@ -50,32 +79,45 @@ image file.}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time when \code{image} is a list. The number of sections is set
-up to 90\% of available cores.}
+up to 70\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
 
 \item{verbose}{If \code{TRUE} (default) a summary is shown in the console.}
+
+\item{nseg}{The number of iterative segmentation steps to be performed.}
+
+\item{...}{Additional arguments passed on to \code{image_segment()}.}
 }
 \value{
-A list containing \code{n} objects where \code{n} is the number of indexes
-used. Each objects contains:
+\itemize{
+\item \code{image_segment()} returns list containing \code{n} objects where \code{n} is the
+number of indexes used. Each objects contains:
 \itemize{
 \item \code{image} an image with the RGB bands (layers) for the segmented object.
 \item \code{mask} A mask with logical values of 0 and 1 for the segmented image.
 }
+\item \code{image_segment_iter()} returns a list with (1) a data frame with the
+proportion of pixels in the segmented images and (2) the segmented images.
+}
 }
 \description{
-Reduce a color, color near-infrared, or grayscale images to a segmented image
-using a given color channel (red, green blue) or even color indexes (See
-\code{\link[=image_index]{image_index()}} for more details). The Otsu's thresholding method (Otsu,
-1979) is used to automatically perform clustering-based image thresholding.
+\itemize{
+\item \code{image_segment()} reduces a color, color near-infrared, or grayscale images
+to a segmented image using a given color channel (red, green blue) or even
+color indexes (See \code{\link[=image_index]{image_index()}} for more details). The Otsu's thresholding
+method (Otsu, 1979) is used to automatically perform clustering-based image
+thresholding.
+\item \code{image_segment_iter()} Provides an iterative image segmentation, returning
+the proportions of segmented pixels.
+}
 }
 \examples{
 library(pliman)
-img <- image_import(image_pliman("soybean_touch.jpg"))
-image_show(img)
+img <- image_pliman("soybean_touch.jpg", plot = TRUE)
 image_segment(img, index = c("R, G, B"))
+
 }
 \references{
 Nobuyuki Otsu, "A threshold selection method from gray-level

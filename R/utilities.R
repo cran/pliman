@@ -88,4 +88,32 @@ image_correct <- function(image, perc){
   return(t(Pp))
 }
 
+check_ebi <- function(){
+  if(!requireNamespace("EBImage", quietly = TRUE)) {
+    if(interactive() == TRUE){
+    inst <-
+    switch(menu(c("Yes", "No"), title = "Package {EBImage} required but not installed.\nDo you want to install it now?"),
+           "yes", "no")
+    if(inst == "yes"){
+      if(!requireNamespace("BiocManager", quietly = TRUE)) {
+        install.packages("BiocManager", quiet = TRUE)
+      }
+      BiocManager::install("EBImage",
+                           update = FALSE,
+                           ask = FALSE,
+                           quiet = TRUE)
+    } else{
+      message("To use {pliman}, first install {EBImage} following the directions at 'https://bioconductor.org/packages/EBImage'")
+    }
+    }
+  }
+}
+
+# get RGB values from a mask computed with EBImage::watershed()
+get_rgb <- function(img, data_mask, index){
+  data.frame(object = index,
+             R = img@.Data[,,1][which(data_mask == index)],
+             G = img@.Data[,,2][which(data_mask == index)],
+             B = img@.Data[,,3][which(data_mask == index)])
+}
 

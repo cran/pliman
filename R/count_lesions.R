@@ -20,12 +20,15 @@
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `img_pattern` is used is informed. The
-#'   number of sections is set up to 90% of available cores.
+#'   number of sections is set up to 70% of available cores.
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param resize Resize the image before processing? Defaults to `FALSE`. Use a
 #'   numeric value of range 0-100 (proportion of the size of the original
 #'   image).
+#' @param fill_hull Fill holes in the image? Defaults to `TRUE`. This is useful
+#'   to fill holes in leaves, e.g., those caused by insect attack, ensuring the
+#'   hole area will be accounted for the leaf, not background.
 #' @param invert Inverts the binary image, if desired. This is useful to process
 #'   images with black background. Defaults to `FALSE`.
 #' @param index,my_index A character value specifying the target mode for
@@ -97,9 +100,9 @@
 #' @examples
 #' \donttest{
 #' library(pliman)
-#' img <- image_import(image_pliman("sev_leaf_nb.jpg"))
-#' healthy <- image_import(image_pliman("sev_healthy.jpg"))
-#' lesions <- image_import(image_pliman("sev_sympt.jpg"))
+#' img <- image_pliman("sev_leaf_nb.jpg")
+#' healthy <- image_pliman("sev_healthy.jpg")
+#' lesions <- image_pliman("sev_sympt.jpg")
 #' image_combine(img, healthy, lesions, ncol = 3)
 #' a <-
 #' count_lesions(img = img,
@@ -119,13 +122,14 @@ count_lesions <- function(img,
                           parallel = FALSE,
                           workers = NULL,
                           resize = FALSE,
+                          fill_hull = TRUE,
                           invert = FALSE,
                           index = "NB",
                           my_index = NULL,
                           lower_size = NULL,
                           upper_size = NULL,
                           randomize = TRUE,
-                          nrows = 10000,
+                          nrows = 3000,
                           lesion_size = "medium",
                           segment = TRUE,
                           tolerance = NULL,
@@ -145,6 +149,7 @@ count_lesions <- function(img,
                           dir_original = NULL,
                           dir_processed = NULL,
                           verbose = TRUE){
+  check_ebi()
   if(!missing(img) & !missing(img_pattern)){
     stop("Only one of `img` or `img_pattern` arguments can be used.", call. = FALSE)
   }
@@ -224,8 +229,8 @@ count_lesions <- function(img,
           ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
           tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
           ifelse(segment == FALSE,
-                 nmask <- bwlabel(plant_symp),
-                 nmask <- watershed(distmap(plant_symp),
+                 nmask <- EBImage::bwlabel(plant_symp),
+                 nmask <- EBImage::watershed(EBImage::distmap(plant_symp),
                                     tolerance = tol,
                                     ext = ext))
           if(show_original == TRUE & show_segmentation == FALSE){
@@ -234,14 +239,14 @@ count_lesions <- function(img,
             im2@.Data[,,2][!ID] <- col_lesions[2]
             im2@.Data[,,3][!ID] <- col_lesions[3]
             if(backg){
-              im3 <- colorLabels(nmask)
+              im3 <- EBImage::colorLabels(nmask)
               im2@.Data[,,1][which(im3@.Data[,,1]==0)] <- img@.Data[,,1][which(im3@.Data[,,1]==0)]
               im2@.Data[,,2][which(im3@.Data[,,2]==0)] <- img@.Data[,,2][which(im3@.Data[,,2]==0)]
               im2@.Data[,,3][which(im3@.Data[,,3]==0)] <- img@.Data[,,3][which(im3@.Data[,,3]==0)]
             }
           }
           if(show_original == TRUE & show_segmentation == TRUE){
-            im2 <- colorLabels(nmask)
+            im2 <- EBImage::colorLabels(nmask)
             if(backg){
               im2@.Data[,,1][which(im2@.Data[,,1]==0)] <- col_background[1]
               im2@.Data[,,2][which(im2@.Data[,,2]==0)] <- col_background[2]
@@ -254,7 +259,7 @@ count_lesions <- function(img,
           }
           if(show_original == FALSE){
             if(show_segmentation == TRUE){
-              im2 <- colorLabels(nmask)
+              im2 <- EBImage::colorLabels(nmask)
               im2@.Data[,,1][which(im2@.Data[,,1]==0)] <- col_leaf[1]
               im2@.Data[,,2][which(im2@.Data[,,2]==0)] <- col_leaf[2]
               im2@.Data[,,3][which(im2@.Data[,,3]==0)] <- col_leaf[3]
@@ -287,8 +292,9 @@ count_lesions <- function(img,
           modelo1 <- suppressWarnings(glm(Y ~ R + G + B, family = binomial("logit"),
                                           data = fundo_resto))
           pred1 <- round(predict(modelo1, newdata = original$df_in, type="response"), 0)
-          plant_background <- matrix(pred1, ncol = ncol(original$R))
-          plant_background <- image_correct(plant_background, perc = 0.009)
+          ifelse(fill_hull == TRUE,
+                 plant_background <- EBImage::fillHull(matrix(pred1, ncol = ncol(original$R))),
+                 plant_background <- matrix(pred1, ncol = ncol(original$R)))
           plant_background[plant_background == 1] <- 2
           sadio_sintoma <-
             transform(rbind(sadio$df_in[sample(1:nrow(sadio$df_in)),][1:nrows,],
@@ -316,12 +322,12 @@ count_lesions <- function(img,
           ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
           tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
           ifelse(segment == FALSE,
-                 nmask <- bwlabel(leaf_sympts),
-                 nmask <- watershed(distmap(leaf_sympts),
+                 nmask <- EBImage::bwlabel(leaf_sympts),
+                 nmask <- EBImage::watershed(EBImage::distmap(leaf_sympts),
                                     tolerance = tol,
                                     ext = ext))
           if(show_original == TRUE & show_segmentation == TRUE){
-            im2 <- colorLabels(nmask)
+            im2 <- EBImage::colorLabels(nmask)
             if(backg){
               im2@.Data[,,1][!ID] <- col_background[1]
               im2@.Data[,,2][!ID] <- col_background[2]
@@ -348,7 +354,7 @@ count_lesions <- function(img,
           }
           if(show_original == FALSE){
             if(show_segmentation == TRUE){
-              im2 <- colorLabels(nmask)
+              im2 <- EBImage::colorLabels(nmask)
               im2@.Data[,,1][which(im2@.Data[,,1]==0)] <- col_background[1]
               im2@.Data[,,2][which(im2@.Data[,,2]==0)] <- col_background[2]
               im2@.Data[,,3][which(im2@.Data[,,3]==0)] <- col_background[3]
@@ -378,7 +384,6 @@ count_lesions <- function(img,
                              resize = FALSE,
                              show_image = FALSE)[[1]]
         img2@.Data[which(imgs[,,1]==1)] <- FALSE
-
         parms <- read.csv(file=system.file("parameters.csv", package = "pliman", mustWork = TRUE), header = T, sep = ";")
         res <- length(img2)
         usef_area <- res
@@ -388,7 +393,7 @@ count_lesions <- function(img,
             eval(parse(text=x))}))
         ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
         tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
-        nmask <- watershed(distmap(img2),
+        nmask <- EBImage::watershed(EBImage::distmap(img2),
                            tolerance = tol,
                            ext = ext)
         ID <- which(img2 == 1)
@@ -401,10 +406,10 @@ count_lesions <- function(img,
             im2@.Data[,,1][ID] <- col_lesions[1]
             im2@.Data[,,2][ID] <- col_lesions[2]
             im2@.Data[,,3][ID] <- col_lesions[3]
-            image_show(im2)
+            plot(im2)
         }
         if(show_original == TRUE & show_segmentation == TRUE){
-          im2 <- colorLabels(nmask)
+          im2 <- EBImage::colorLabels(nmask)
             im2@.Data[,,1][which(imgs[,,1]==1)] <- col_background[1]
             im2@.Data[,,2][which(imgs[,,2]==1)] <- col_background[2]
             im2@.Data[,,3][which(imgs[,,3]==1)] <- col_background[3]
@@ -414,7 +419,7 @@ count_lesions <- function(img,
         }
         if(show_original == FALSE){
           if(show_segmentation == TRUE){
-            im2 <- colorLabels(nmask)
+            im2 <- EBImage::colorLabels(nmask)
             im2@.Data[,,1][ID2] <- col_leaf[1]
             im2@.Data[,,2][ID2] <- col_leaf[2]
             im2@.Data[,,3][ID2] <- col_leaf[3]
@@ -437,8 +442,8 @@ count_lesions <- function(img,
       }
 
       shape <-
-        cbind(data.frame(computeFeatures.shape(nmask)),
-              data.frame(computeFeatures.moment(nmask))[,1:2]
+        cbind(data.frame(EBImage::computeFeatures.shape(nmask)),
+              data.frame(EBImage::computeFeatures.moment(nmask))[,1:2]
         )
       ifelse(!is.null(lower_size),
              shape <- shape[shape$s.area > lower_size, ],
@@ -454,7 +459,7 @@ count_lesions <- function(img,
       marker_size <- ifelse(is.null(marker_size), 0.9, marker_size)
       if(show_image == TRUE){
         if(marker == "text"){
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             text(shape[,2],
                  shape[,3],
@@ -463,7 +468,7 @@ count_lesions <- function(img,
                  cex = marker_size)
           }
         } else{
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             points(shape[,2],
                    shape[,3],
@@ -484,7 +489,7 @@ count_lesions <- function(img,
             width = dim(im2@.Data)[1],
             height = dim(im2@.Data)[2])
         if(marker == "text"){
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             text(shape[,2],
                  shape[,3],
@@ -493,7 +498,7 @@ count_lesions <- function(img,
                  cex = marker_size)
           }
         } else{
-          image_show(im2)
+          plot(im2)
           if(show_mark){
             points(shape[,2],
                    shape[,3],
@@ -554,14 +559,12 @@ count_lesions <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.9), workers)
+      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.8), workers)
       clust <- makeCluster(nworkers)
       clusterExport(clust,
                     varlist = c("names_plant", "help_count", "file_name",
                                 "check_names_dir", "file_extension", "image_import",
-                                "image_binary", "watershed", "distmap", "computeFeatures.moment",
-                                "computeFeatures.shape", "colorLabels", "image_show",
-                                "image_to_mat", "image_correct", "bwlabel"),
+                                "image_binary", "image_to_mat", "image_correct", "bwlabel"),
                     envir=environment())
       on.exit(stopCluster(clust))
       if(verbose == TRUE){

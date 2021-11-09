@@ -1,12 +1,12 @@
 #' Utilities for object measures
 #'
-#'* `get_measures()` computes object measures (area, perimeter, radius) by using
+#' * `get_measures()` computes object measures (area, perimeter, radius) by using
 #'either a known resolution (dpi) or an object with known measurements.
 #' * `plot_measures()` draws the object measures given in an object to the
 #' current plot. The object identification (`"id"`) is drawn by default.
 #'
 #' @name utils_measures
-#' @param object An object computed with [count_objects()] or [leaf_area()].
+#' @param object An object computed with [analyze_objects()].
 #' @param dpi A known resolution of the image in DPI (dots per inch).
 #' @param id An object in the image to indicate a known value.
 #' @param measure For `plot_measures()`, a character string; for
@@ -22,17 +22,40 @@
 #' * `radius_max` The known maximum radius of the object. If the object is a
 #' square, then the `radius_max` of such object according to the Pythagorean
 #' theorem will be `L x sqrt(2) / 2` where `L` is the length of the square side.
+#' @param sep Regular expression to manage file names. The function combines in
+#'   the `merge` object the object measures (sum of area and mean of all the
+#'   other measures) of all images that share the same filename prefix, defined
+#'   as the part of the filename preceding the first hyphen (-) or underscore
+#'   (_) (no hyphen or underscore is required). For example, the measures of
+#'   images named L1-1.jpeg, L1-2.jpeg, and L1-3.jpeg would be combined into a
+#'   single image information (L1). This feature allows the user to treat
+#'   multiple images as belonging to a single sample, if desired. Defaults to
+#'   `sep = "\\_|-"`.
+#' @param hjust,vjust A numeric value to adjust the labels horizontally and
+#'   vertically. Positive values will move labels to right (hjust) and top
+#'   (vjust). Negative values will move the labels to left and bottom,
+#'   respectively.
 #' @param digits The number of significant figures. Defaults to `2.`
 #' @param size The size of the text. Defaults to `0.9`.
 #' @param col The color of the text. Defaults to `"white"`.
 #' @param verbose If `FALSE`, runs the code silently.
 #' @param ... Further arguments passed on to [graphics::text()].
 #' @return
-#' * `get_measures()` returns a data frame with the object `id` and the
-#' measures. If `measure` is informed, the pixel values will be corrected by the
-#' value of the known object, given in the unit of the right-hand side of
-#' `measure`. If `dpi` is informed, then all the measures will be adjusted to
-#' the known `dpi`.
+#' * For `get_measures()`, if `measure` is informed, the pixel values will be
+#' corrected by the value of the known object, given in the unit of the
+#' right-hand side of `measure`. If `dpi` is informed, then all the measures
+#' will be adjusted to the known `dpi`.
+#'
+#'    -  If applied to an object of class `anal_obj`, returns a data frame with the
+#' object `id` and the (corrected) measures.
+#'    - If applied to an object of class `anal_obj_ls`, returns a list of class
+#'    `measures_ls`, with two objects: (i) `results`, a data frame containing
+#'    the identification of each image (img) and object within each image (id);
+#'    and (ii) `summary` a data frame containing the values for each image. If
+#'    more than one object is detected in a given image, the number of objects
+#'    (`n`), total area (`area_sum`), mean area (`area_mean`) and the standard
+#'    deviation of the area (`area_sd`) will be computed. For the other measures
+#'    (perimeter and radius), the mean values are presented.
 #' * `plot_measures()` returns a `NULL` object, drawing the text according to
 #' the x and y coordinates of the objects in `object`.
 #' @export
@@ -40,8 +63,8 @@
 #' @examples
 #' \donttest{
 #' library(pliman)
-#' img <- image_import(image_pliman("objects_300dpi.jpg"))
-#' image_show(img)
+#' img <- image_pliman("objects_300dpi.jpg")
+#' plot(img)
 #' # Image with four objects with a known resolution of 300 dpi
 #' # Higher square: 10 x 10 cm
 #' # Lower square: 5 x 5 cm
@@ -50,7 +73,7 @@
 #'
 #' # Count the objects using the blue band to segment the image
 #' results <-
-#'    count_objects(img,
+#'    analyze_objects(img,
 #'                  index = "B")
 #' plot_measures(results, measure = "id")
 #'
@@ -73,6 +96,7 @@ get_measures <- function(object,
                          id = NULL,
                          measure = NULL,
                          dpi = NULL,
+                         sep = "\\_|-",
                          verbose = TRUE,
                          digits = 3){
   if(is.data.frame(object)){
@@ -81,7 +105,7 @@ get_measures <- function(object,
     }
     res <- object
   }
-  if(any(class(object) == "plm_count")){
+  if(any(class(object) %in% c("anal_obj", "anal_obj_ls"))){
     res <- object$results
   }
   if(any(class(object) == "plm_la")){
@@ -96,6 +120,9 @@ get_measures <- function(object,
   }
   if(any(class(object) == "objects_rgb")){
     res <- object[["objects"]]
+  }
+  if(class(object) == "plm_disease"){
+    res <- object$shape
   }
   if(!is.null(id) & !is.null(dpi)){
     stop("Only one of 'dpi' or 'id' can be used.", call. = FALSE)
@@ -120,19 +147,31 @@ get_measures <- function(object,
       values <- res[, var]
       corrected <- values * value / id_val
       res$area <- corrected
+      res$area_ch <- res$area_ch * px_side^2
       res$perimeter <- res$perimeter * px_side
       res$radius_mean <- res$radius_mean * px_side
       res$radius_min <- res$radius_min * px_side
       res$radius_max <- res$radius_max * px_side
+      res$diam_mean <- res$diam_mean * px_side
+      res$diam_min <- res$diam_min * px_side
+      res$diam_max <- res$diam_max * px_side
+      res$major_axis <- res$major_axis * px_side
+      res$minor_axis <- res$major_axis * px_side
     }
     if(var != "area"){
       id_val <- res[which(res$id == id), var]
       px_side <- value / id_val
       res$area <- res$area * px_side^2
+      res$area_ch <- res$area_ch * px_side^2
       res$perimeter <- res$perimeter * px_side
       res$radius_mean <- res$radius_mean * px_side
       res$radius_min <- res$radius_min * px_side
       res$radius_max <- res$radius_max * px_side
+      res$diam_mean <- res$diam_mean * px_side
+      res$diam_min <- res$diam_min * px_side
+      res$diam_max <- res$diam_max * px_side
+      res$major_axis <- res$major_axis * px_side
+      res$minor_axis <- res$major_axis * px_side
     }
     if(verbose == TRUE){
       cat("-----------------------------------------\n")
@@ -147,42 +186,113 @@ get_measures <- function(object,
   if(!is.null(dpi)){
     dpc <- dpi * 1 / 2.54
     res$area <- res$area * 1/dpc^2
+    res$area_ch <- res$area_ch * 1/dpc^2
     res$perimeter <- res$perimeter / dpc
     res$radius_mean <- res$radius_mean / dpc
     res$radius_min <- res$radius_min / dpc
     res$radius_max <- res$radius_max / dpc
+    res$diam_mean <- res$diam_mean / dpc
+    res$diam_min <- res$diam_min / dpc
+    res$diam_max <- res$diam_max / dpc
+    res$major_axis <- res$major_axis / dpc
+    res$minor_axis <- res$major_axis / dpc
   }
-  res[,1:10] <- apply(res[,1:10], 2, round, digits)
-  class(res) <- c("data.frame", "plm_measures")
-  return(res)
+  if("img" %in% names(res)){
+    smr <-
+      do.call(cbind,
+              lapply(5:ncol(res), function(i){
+                if(i == 5){
+                  n <- aggregate(res[[i]] ~ img, res, length)[[2]]
+                  s <- aggregate(res[[i]] ~ img, res, sum, na.rm = TRUE)[2]
+                  a <- aggregate(res[[i]] ~ img, res, mean, na.rm = TRUE)[2]
+                  d <- aggregate(res[[i]] ~ img, res, sd, na.rm = TRUE)[2]
+                  cbind(n, s, a, d)
+                } else{
+                  aggregate(res[[i]] ~ img, res, mean, na.rm = TRUE)[2]
+                }
+              })
+      )
+    names(smr) <- c("n", "area_sum", "area_mean", "area_sd",  names(res[6:ncol(res)]))
+    smr$img <- unique(res$img)
+    smr <- smr[,c(ncol(smr), 1:ncol(smr)-1)]
+    smr$area_sd[is.na(smr$area_sd)] <- 0
+    merg <- smr
+    merg$img = sapply(strsplit(as.character(merg$img), sep), "[", 1)
+    mergt <-
+      do.call(cbind,
+              lapply(2:ncol(merg), function(i){
+                if(i %in% 2:3){
+                  aggregate(merg[[i]] ~ img, merg, sum, na.rm = TRUE)[2]
+                } else{
+                  aggregate(merg[[i]] ~ img, merg, mean, na.rm = TRUE)[2]
+                }
+              })
+      )
+    mergt$img <- unique(merg$img)
+    mergt <- mergt[,c(ncol(mergt), 1:ncol(mergt)-1)]
+    names(mergt) <- names(smr)
+    smr[,3:ncol(smr)] <- apply(smr[,3:ncol(smr)], 2, round, digits)
+    res[,3:ncol(res)] <- apply(res[,3:ncol(res)], 2, round, digits)
+    rownames(res) <- NULL
+    mergt[,3:ncol(mergt)] <- apply(mergt[,3:ncol(mergt)], 2, round, digits)
+    out <-
+      list(results = res,
+           summary = smr,
+           merge = mergt)
+    class(out) <- c("measures_ls")
+    return(out)
+  } else{
+    res[,2:ncol(res)] <- apply(res[,2:ncol(res)], 2, round, digits)
+    class(res) <- c("data.frame", "measures")
+    return(res)
+  }
 }
 
 #' @name utils_measures
 #' @export
 plot_measures <- function(object,
                           measure = "id",
+                          hjust = NULL,
+                          vjust = NULL,
                           digits = 2,
                           size = 0.9,
                           col = "white",
                           ...){
-  if("plm_measures"  %in% class(object)){
+  if("measures"  %in% class(object)){
     object <- object
-  } else if(class(object) == "plm_count"){
+  } else if(class(object) == "anal_obj"){
+    index <- object$object_index
     object <- object$results
   } else if(class(object) == "objects_rgb"){
-    object <- cbind(object[["objects"]], index = object$indexes$index)
+    object <- object$objects
+  } else if(class(object) == "plm_disease"){
+    object <- object$shape
   } else{
     stop("Object of ivalid class.")
   }
-  measures <- c("id", "area", "perimeter", "radius_mean", "radius_min", "radius_max", "radius_ratio", "index")
-  if(!measure %in% measures){
-    stop("'measure' must be one of the", paste(measures, collapse = ", "), call. = FALSE)
+  if(measure %in% colnames(object)){
+    hjust <- ifelse(is.null(hjust), 0, hjust)
+    vjust <- ifelse(is.null(vjust), 0, vjust)
+    text(x = object[,2] + hjust,
+         y = object[,3] - vjust,
+         labels = round(object[, which(colnames(object) == measure)], digits),
+         col = col,
+         cex = size,
+         ...)
+  } else{
+    if(!is.null(index)){
+      measures <- colnames(index)
+      if(!measure %in% measures){
+        stop("'measure' must be one of {", paste(c(colnames(object), measures), collapse = ", "),"}.", call. = FALSE)
+      }
+      text(x = object[,2],
+           y = object[,3],
+           labels = round(index[, which(colnames(index) == measure)], digits),
+           col = col,
+           cex = size,
+           ...)
+    } else{
+      stop("'measure' must be one of {", paste(colnames(object), collapse = ", "),"}.", call. = FALSE)
+    }
   }
-  text(x = object[,2],
-       y = object[,3],
-       labels = round(object[, which(colnames(object) == measure)], digits),
-       col = col,
-       cex = size,
-       ...)
 }
-

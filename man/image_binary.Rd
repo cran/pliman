@@ -8,6 +8,7 @@ image_binary(
   image,
   index = NULL,
   my_index = NULL,
+  threshold = "Otsu",
   resize = 30,
   fill_hull = FALSE,
   re = NULL,
@@ -25,17 +26,22 @@ image_binary(
 \item{image}{An image object.}
 
 \item{index}{A character value (or a vector of characters) specifying the
-target mode for conversion to binary image. One of the following:  \code{"R"},
-\code{"G"}, \code{"B"} \code{"GR"}, \code{"NR"}, \code{"NG"}, \code{"NB"}, \code{"BI"}, \code{"BIM"}, \code{"SCI"},
-\code{"GLI"}, \code{"HI"}, \code{"NGRDI"}, \code{"SI"}, \code{"VARI"}, \code{"HUE"}, \code{"HUE2"}, \code{"BGI"},
-\code{"BGI"}. See \code{\link[=image_index]{image_index()}} for more details.}
+target mode for conversion to binary image. See the available indexes with
+\code{\link[=pliman_indexes]{pliman_indexes()}} and \code{\link[=image_index]{image_index()}} for more details.}
 
-\item{my_index}{User can calculate a different index using the bands names,
+\item{my_index}{User can calculate a different index using the band names,
 e.g. \code{my_index = "R+B/G"}.}
 
-\item{resize}{Resize the image before processing? Defaults to \code{30}, which
-resizes the image to 30\% of the original size to speed up image processing.
-Set \code{resize = FALSE} to keep the original size of the image.}
+\item{threshold}{By default (\code{threshold = "Otsu"}), a threshold value based
+on Otsu's method is used to reduce the grayscale image to a binary image.
+If a numeric value is informed, this value will be used as a threshold.
+Inform any non-numeric value different than "Otsu" to iteratively chosen
+the threshold based on a raster plot showing pixel intensity of the index.}
+
+\item{resize}{Resize the image before processing? Defaults to \code{FALSE}. Use a
+numeric value as the percentage of desired resizing. For example, if
+\code{resize = 30}, the resized image will have 30\% of the size of original
+image.}
 
 \item{fill_hull}{Fill holes in the objects? Defaults to \code{FALSE}.}
 
@@ -55,7 +61,7 @@ image file.}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time when \code{image} is a list. The number of sections is set
-up to 90\% of available cores.}
+up to 70\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
@@ -74,8 +80,8 @@ clustering-based image thresholding.
 }
 \examples{
 library(pliman)
-img <- image_import(image_pliman("soybean_touch.jpg"))
-image_binary(img, index = c("R, NR"), nrow = 1)
+img <- image_pliman("soybean_touch.jpg")
+image_binary(img, index = c("R, G"))
 }
 \references{
 Nobuyuki Otsu, "A threshold selection method from gray-level

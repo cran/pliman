@@ -1,6 +1,8 @@
 #' Get Red Green and Blue for image objects
 #'
-#' Get the Red Green and Blue (RGB) for objects in an image.
+#' Get the Red Green and Blue (RGB) for objects in an image. This function will
+#' be deprecated in a near future. Use [analyze_objects()] with the argument
+#' `object_index` instead.
 #'
 #'A binary image is first generated to segment the foreground and background.
 #'The argument index is useful to choose a proper index to segment the image
@@ -28,7 +30,7 @@
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `img_pattern` is used is informed. The
-#'   number of sections is set up to 90% of available cores.
+#'   number of sections is set up to 70% of available cores.
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param resize Resize the image before processing? Defaults to `FALSE`. Use a
@@ -99,12 +101,8 @@
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
 #' \donttest{
-#' library(pliman)
-#' img <- image_import(image_pliman("soy_green.jpg"))
-#' # Segment the foreground (grains) using the normalized blue index
-#' # Shows the average value of the blue index in each object
-#' rgb <- objects_rgb(img)
-#' plot(rgb)
+#' # objects_rgb() will be deprecated in the future.
+#' # Use analyze_objects() with the argument `object_index` instead.
 #' }
 objects_rgb <- function(img,
                         foreground = NULL,
@@ -136,6 +134,8 @@ objects_rgb <- function(img,
                         dir_original = NULL,
                         dir_processed = NULL,
                         verbose = TRUE){
+  check_ebi()
+  message("`objects_rgb()` will be deprecated in the future. Use `analyze_objects()` with the argument `object_index` instead.")
   if(!object_size %in% c("small", "medium", "large", "elarge")){
     stop("'object_size' must be one of 'small', 'medium', 'large', or 'elarge'")
   }
@@ -167,7 +167,7 @@ objects_rgb <- function(img,
         extens_ori <- "jpg"
       }
       if(resize != FALSE){
-        img <- image_resize(img, resize)
+        img <- EBImage::resize(img, resize)
       }
       if(!is.null(foreground) && !is.null(background)){
         if(is.character(foreground)){
@@ -178,7 +178,7 @@ objects_rgb <- function(img,
           extens <- file_extension(imag)
           foreground <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
           if(resize != FALSE){
-            foreground <- image_resize(foreground, resize)
+            foreground <- EBImage::resize(foreground, resize)
           }
         }
         if(is.character(background)){
@@ -189,7 +189,7 @@ objects_rgb <- function(img,
           extens <- file_extension(imag)
           background <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
           if(resize != FALSE){
-            background <- image_resize(background, resize)
+            background <- EBImage::resize(background, resize)
           }
         }
         original <- image_to_mat(img)
@@ -213,7 +213,7 @@ objects_rgb <- function(img,
             eval(parse(text=x))}))
         ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
         tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
-        nmask <- watershed(distmap(foreground_background),
+        nmask <- EBImage::watershed(EBImage::distmap(foreground_background),
                            tolerance = tol,
                            ext = ext)
       } else{
@@ -231,7 +231,7 @@ objects_rgb <- function(img,
             eval(parse(text=x))}))
         ext <- ifelse(is.null(extension),  parms2[rowid, 3], extension)
         tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
-        nmask <- watershed(distmap(img2),
+        nmask <- EBImage::watershed(EBImage::distmap(img2),
                            tolerance = tol,
                            ext = ext)
       }
@@ -242,34 +242,14 @@ objects_rgb <- function(img,
                    G = img@.Data[,,2][which(data_mask == index)],
                    B = img@.Data[,,3][which(data_mask == index)])
       }
-
-      # if(parallel == TRUE){
-      #   nworkers <- ifelse(is.null(workers), trunc(detectCores()*.9), workers)
-      #   clust <- makeCluster(nworkers)
-      #   clusterExport(clust,
-      #                 varlist = c("get_rgb"),
-      #                 envir=environment())
-      #   on.exit(stopCluster(clust))
-      #   if(verbose == TRUE){
-      #     message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      #   }
-      #   rgb_objects <-
-      #     do.call(rbind,
-      #             parLapply(clust, 1:max(data_mask),
-      #                       function(i){
-      #                         get_rgb(img, data_mask, i)
-      #                       }))
-      #
-      # } else{
-        rgb_objects <-
-          do.call(rbind,
-                  lapply(1:max(data_mask), function(i){
-                    get_rgb(img, data_mask, i)
-                  }))
-      # }
+      rgb_objects <-
+        do.call(rbind,
+                lapply(1:max(data_mask), function(i){
+                  get_rgb(img, data_mask, i)
+                }))
       shape <-
-        cbind(data.frame(computeFeatures.shape(nmask)),
-              data.frame(computeFeatures.moment(nmask))[,1:2]
+        cbind(data.frame(EBImage::computeFeatures.shape(nmask)),
+              data.frame(EBImage::computeFeatures.moment(nmask))[,1:2]
         )
       shape$id <- 1:nrow(shape)
       ifelse(!is.null(lower_size),
@@ -293,23 +273,23 @@ objects_rgb <- function(img,
       marker_col <- ifelse(is.null(marker_col), "white", marker_col)
       marker_size <- ifelse(is.null(marker_size), 0.9, marker_size)
       if(show_image == TRUE){
-      image_show(img)
-      if(!is.null(marker)){
-      if(marker != "index"){
-        text(shape[,2],
-             shape[,3],
-             shape[,1],
-             col = marker_col,
-             cex = marker_size)
-      } else{
-        text(shape[,2],
-             shape[,3],
-             round(indexes[,2], 2),
-             col = marker_col,
-             cex = marker_size)
+        plot(img)
+        if(!is.null(marker)){
+          if(marker != "index"){
+            text(shape[,2],
+                 shape[,3],
+                 shape[,1],
+                 col = marker_col,
+                 cex = marker_size)
+          } else{
+            text(shape[,2],
+                 shape[,3],
+                 round(indexes[,2], 2),
+                 col = marker_col,
+                 cex = marker_size)
 
-      }
-      }
+          }
+        }
 
 
       }
@@ -323,22 +303,22 @@ objects_rgb <- function(img,
                    extens_ori),
             width = dim(img@.Data)[1],
             height = dim(img@.Data)[2])
-        image_show(img)
+        plot(img)
         if(!is.null(marker)){
-        if(marker != "index"){
-          text(shape[,2],
-               shape[,3],
-               shape[,1],
-               col = marker_col,
-               cex = marker_size)
-        } else{
-          text(shape[,2],
-               shape[,3],
-               round(indexes[,2], 2),
-               col = marker_col,
-               cex = marker_size)
+          if(marker != "index"){
+            text(shape[,2],
+                 shape[,3],
+                 shape[,1],
+                 col = marker_col,
+                 cex = marker_size)
+          } else{
+            text(shape[,2],
+                 shape[,3],
+                 round(indexes[,2], 2),
+                 col = marker_col,
+                 cex = marker_size)
 
-        }
+          }
         }
         dev.off()
       }
@@ -366,14 +346,12 @@ objects_rgb <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff.\nExtensions found:", paste(extensions, sep = ", "))
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.9), workers)
+      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.7), workers)
       clust <- makeCluster(nworkers)
       clusterExport(clust,
                     varlist = c("names_plant", "help_count", "file_name",
                                 "check_names_dir", "file_extension", "image_import",
-                                "image_binary", "watershed", "distmap", "computeFeatures.moment",
-                                "computeFeatures.shape", "colorLabels", "image_show",
-                                "image_resize", "detectCores", "makeCluster", "clusterExport",
+                                "image_binary", "image_resize", "detectCores", "makeCluster", "clusterExport",
                                 "stopCluster", "parLapply"),
                     envir=environment())
       on.exit(stopCluster(clust))
@@ -393,8 +371,8 @@ objects_rgb <- function(img,
       pb <- progress(max = length(plants), style = 4)
       for (i in 1:length(plants)) {
         if(verbose == TRUE){
-        run_progress(pb, actual = i,
-                     text = paste("Processing image", names_plant[i]))
+          run_progress(pb, actual = i,
+                       text = paste("Processing image", names_plant[i]))
         }
         results[[i]] <-
           help_count(img  = names_plant[i],
@@ -407,15 +385,15 @@ objects_rgb <- function(img,
     objects <-
       do.call(rbind,
               lapply(seq_along(results), function(i){
-                  transform(results[[i]][["objects"]],
-                            img =  names(results[i]))[,c(10, 1:9)]
+                transform(results[[i]][["objects"]],
+                          img =  names(results[i]))[,c(10, 1:9)]
               })
       )
     indexes <-
       do.call(rbind,
               lapply(seq_along(results), function(i){
-                  transform(results[[i]][["indexes"]],
-                            img =  names(results[i]))[, c(3, 1:2)]
+                transform(results[[i]][["indexes"]],
+                          img =  names(results[i]))[, c(3, 1:2)]
               })
       )
     invisible(list(objects = objects,
@@ -425,47 +403,4 @@ objects_rgb <- function(img,
 
 
 
-#' Plots an `objects_rgb` object
-#'
-#' Produces an histogram of an `objects_rgb` object
-#'
-#' @name objects_rgb
-#' @param x An object of class `objects_rgb`.
-#' @param ... Currently not used
-#' @method plot objects_rgb
-#' @export
-#' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
-#' @return A `ggplot` object containing the distribution of the pixels for each
-#'   index.
-#' @examples
-#' \donttest{
-#' library(pliman)
-#'
-#' img <- image_import(image_pliman("soy_green.jpg"))
-#' # Segment the foreground (grains) using the normalized blue index
-#' # Shows the average value of the blue index in each object
-#' rgb <- objects_rgb(img)
-#' plot(rgb)
-#' }
-plot.objects_rgb <- function(x, ...){
-  rgb <- x$rgb
-  rgb$id <- rownames(rgb)
-  rgb <-
-    reshape(rgb,
-            direction = "long",
-            varying = list(names(rgb)[2:4]),
-            v.names = "value",
-            idvar = "id",
-            timevar = "Spectrum",
-            times = c("r", "g", "b"))
-  rgb$Spectrum <- factor( rgb$Spectrum, levels = unique( rgb$Spectrum))
-  ggplot(rgb, aes(value, fill = Spectrum)) +
-    geom_density(alpha = 0.6) +
-    scale_y_continuous(expand = expansion(c(0, 0.05))) +
-    scale_x_continuous(expand = expansion(c(0, 0))) +
-    facet_wrap(~object) +
-    theme(legend.position = "bottom",
-          legend.title = element_blank(),
-          axis.ticks.length = unit(0.2, "cm"),
-          panel.grid.minor = element_blank())
-}
+

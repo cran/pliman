@@ -1,13 +1,6 @@
 #'Calculates the leaf area
 #'
-#'* `leaf_area ()` Calculates the leaf area using an image with leaves and a
-#'template with a known area. A general linear model (binomial family) fitted to
-#'the RGB values is used to first separate the leaves and template from the
-#'background and then the leaves from the template. The leaf area is then
-#'calculated for each leaf based on the pixel area. By using `img_pattern` it is
-#'possible to process several images with common pattern names that are stored
-#'in the current working directory or in the subdirectory informed in
-#'`dir_originals`.
+#'* `leaf_area ()` is deprecated. use [analyze_objects()] instead.
 #' @name leaf_area
 #' @param img The image to be analyzed.
 #' @param img_pattern A pattern of file name used to identify images to be
@@ -26,7 +19,7 @@
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `img_pattern` is used is informed. The
-#'   number of sections is set up to 90% of available cores.
+#'   number of sections is set up to 70% of available cores.
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param lower_size Lower limit for size for the image analysis. Leaf images
@@ -63,24 +56,15 @@
 #' @importFrom graphics text par points rect
 #' @examples
 #' \donttest{
+#' # use analyze_objects() to compute the leaf area.
+#'
 #' library(pliman)
-#' img <- image_import(image_pliman("la_pattern.JPG"))
-#' leaf <- image_import(image_pliman("la_leaf.jpg"))
-#' tmpl <- image_import(image_pliman("la_temp.jpg"))
-#' background <- image_import(image_pliman("la_back.jpg"))
+#' img <- image_pliman("la_leaves.jpg")
+#' lef_area <- analyze_objects(img, marker = "id")
 #'
-#' # Combine the images
-#' image_combine(img, leaf, tmpl, background)
-#'
-#' # Computes the leaf area
-#' area <-
-#' leaf_area(img = img,
-#'           img_leaf = leaf,
-#'           img_template = tmpl,
-#'           img_background = background,
-#'           area_template = 4,
-#'           text_col = "white")
-#' get_measures(area)
+#' # correct pixel to metric units using the image dpi (~84)
+#' # the object 6 (leaf square) has a known area of ~ 4 cm2.
+#' get_measures(lef_area, dpi = 84)
 #' }
 #'
 leaf_area <- function(img,
@@ -108,6 +92,8 @@ leaf_area <- function(img,
                       dir_original = NULL,
                       dir_processed = NULL,
                       verbose = TRUE){
+  check_ebi()
+  message("`leaf_area()` will be deprecated in the future. Use `analyze_objects()` instead.")
   # Some parts adapted from
   # https://github.com/AlcineiAzevedo/Segmentacao-conchonilha2
   # Thanks to Alcinei Azevedo for his tips
@@ -134,7 +120,7 @@ leaf_area <- function(img,
         extens_ori <- file_extension(imag)
         img <- image_import(paste(diretorio_original, "/", name_ori, ".", extens_ori, sep = ""))
         if(resize != FALSE){
-          img <- image_resize(img, resize)
+          img <- EBImage::resize(img, resize)
         }
       } else{
         name_ori <- match.call()[[2]]
@@ -148,7 +134,7 @@ leaf_area <- function(img,
         extens <- file_extension(imag)
         img_leaf <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
         if(resize != FALSE){
-          img_leaf <- image_resize(img_leaf, resize)
+          img_leaf <- EBImage::resize(img_leaf, resize)
         }
       }
       if(is.character(img_template)){
@@ -159,7 +145,7 @@ leaf_area <- function(img,
         extens <- file_extension(imag)
         img_template <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
         if(resize != FALSE){
-          img_template <- image_resize(img_template, resize)
+          img_template <- EBImage::resize(img_template, resize)
         }
       }
       if(is.character(img_background)){
@@ -170,7 +156,7 @@ leaf_area <- function(img,
         extens <- file_extension(imag)
         img_background <- image_import(paste(diretorio_original, "/", name, ".", extens, sep = ""))
         if(resize != FALSE){
-          img_background <- image_resize(img_background, resize)
+          img_background <- EBImage::resize(img_background, resize)
         }
       }
       original <- image_to_mat(img)
@@ -189,7 +175,6 @@ leaf_area <- function(img,
       plant_background <- matrix(pred1, ncol = ncol(original$R))
       plant_background <- image_correct(plant_background, perc = 0.009)
       plant_background[plant_background == 1] <- 2
-      # image_show(plant_background!=2)
       # separate leaf from template
       leaf_template <-
         transform(rbind(leaf$df_in[sample(1:nrow(leaf$df_in)),][1:nrows,],
@@ -204,18 +189,18 @@ leaf_area <- function(img,
       leaf_template <- matrix(pred3, ncol = ncol(original$R))
       leaf_template <- image_correct(leaf_template, perc = 0.009)
       plant_background[leaf_template == 1] <- 3
-      mpred1 <- bwlabel(leaf_template == 1)
+      mpred1 <- EBImage::bwlabel(leaf_template == 1)
       shape_template <-
-        cbind(data.frame(computeFeatures.shape(mpred1)),
-              data.frame(computeFeatures.moment(mpred1))[,1:2]
+        cbind(data.frame(EBImage::computeFeatures.shape(mpred1)),
+              data.frame(EBImage::computeFeatures.moment(mpred1))[,1:2]
         )
       shape_template$area <- area_template
       shape_template <- shape_template[shape_template$s.area >= mean(shape_template$s.area), ]
       npix_ref <- shape_template[1, 1]
-      mpred2 <- bwlabel(plant_background == 0)
+      mpred2 <- EBImage::bwlabel(plant_background == 0)
       shape_leaf <-
-        cbind(data.frame(computeFeatures.shape(mpred2)),
-              data.frame(computeFeatures.moment(mpred2))[, c(1, 2)]
+        cbind(data.frame(EBImage::computeFeatures.shape(mpred2)),
+              data.frame(EBImage::computeFeatures.moment(mpred2))[, c(1, 2)]
         )
       shape_leaf$area <- shape_leaf$s.area * area_template / npix_ref
       if(!is.null(lower_size)){
@@ -256,7 +241,7 @@ leaf_area <- function(img,
         im2@.Data[,,3][!ID] <- col_background[3]
       }
       if(show_image == TRUE){
-        image_show(im2)
+        plot(im2)
         text(shape[,2],
              shape[,3],
              shape$label,
@@ -273,7 +258,7 @@ leaf_area <- function(img,
                   collapse = "", sep = ""),
             width = dim(im2@.Data)[1],
             height = dim(im2@.Data)[2])
-        image_show(im2)
+        plot(im2)
         text(shape[,2],
              shape[,3],
              shape$label,
@@ -310,14 +295,12 @@ leaf_area <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.9), workers)
+      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.8), workers)
       clust <- makeCluster(nworkers)
       clusterExport(clust,
                     varlist = c("names_plant", "help_area", "file_name",
                                 "check_names_dir", "file_extension", "image_import",
-                                "image_binary", "watershed", "distmap", "computeFeatures.moment",
-                                "computeFeatures.shape", "colorLabels", "image_show",
-                                "image_to_mat", "image_correct", "bwlabel"),
+                                "image_binary", "image_to_mat", "image_correct", "bwlabel"),
                     envir=environment())
       on.exit(stopCluster(clust))
       if(verbose == TRUE){

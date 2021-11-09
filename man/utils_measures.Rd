@@ -11,6 +11,7 @@ get_measures(
   id = NULL,
   measure = NULL,
   dpi = NULL,
+  sep = "\\\\_|-",
   verbose = TRUE,
   digits = 3
 )
@@ -18,6 +19,8 @@ get_measures(
 plot_measures(
   object,
   measure = "id",
+  hjust = NULL,
+  vjust = NULL,
   digits = 2,
   size = 0.9,
   col = "white",
@@ -25,7 +28,7 @@ plot_measures(
 )
 }
 \arguments{
-\item{object}{An object computed with \code{\link[=count_objects]{count_objects()}} or \code{\link[=leaf_area]{leaf_area()}}.}
+\item{object}{An object computed with \code{\link[=analyze_objects]{analyze_objects()}}.}
 
 \item{id}{An object in the image to indicate a known value.}
 
@@ -47,9 +50,24 @@ theorem will be \verb{L x sqrt(2) / 2} where \code{L} is the length of the squar
 
 \item{dpi}{A known resolution of the image in DPI (dots per inch).}
 
+\item{sep}{Regular expression to manage file names. The function combines in
+the \code{merge} object the object measures (sum of area and mean of all the
+other measures) of all images that share the same filename prefix, defined
+as the part of the filename preceding the first hyphen (-) or underscore
+(_) (no hyphen or underscore is required). For example, the measures of
+images named L1-1.jpeg, L1-2.jpeg, and L1-3.jpeg would be combined into a
+single image information (L1). This feature allows the user to treat
+multiple images as belonging to a single sample, if desired. Defaults to
+\code{sep = "\\\\_|-"}.}
+
 \item{verbose}{If \code{FALSE}, runs the code silently.}
 
 \item{digits}{The number of significant figures. Defaults to \code{2.}}
+
+\item{hjust, vjust}{A numeric value to adjust the labels horizontally and
+vertically. Positive values will move labels to right (hjust) and top
+(vjust). Negative values will move the labels to left and bottom,
+respectively.}
 
 \item{size}{The size of the text. Defaults to \code{0.9}.}
 
@@ -59,11 +77,22 @@ theorem will be \verb{L x sqrt(2) / 2} where \code{L} is the length of the squar
 }
 \value{
 \itemize{
-\item \code{get_measures()} returns a data frame with the object \code{id} and the
-measures. If \code{measure} is informed, the pixel values will be corrected by the
-value of the known object, given in the unit of the right-hand side of
-\code{measure}. If \code{dpi} is informed, then all the measures will be adjusted to
-the known \code{dpi}.
+\item For \code{get_measures()}, if \code{measure} is informed, the pixel values will be
+corrected by the value of the known object, given in the unit of the
+right-hand side of \code{measure}. If \code{dpi} is informed, then all the measures
+will be adjusted to the known \code{dpi}.
+\itemize{
+\item If applied to an object of class \code{anal_obj}, returns a data frame with the
+object \code{id} and the (corrected) measures.
+\item If applied to an object of class \code{anal_obj_ls}, returns a list of class
+\code{measures_ls}, with two objects: (i) \code{results}, a data frame containing
+the identification of each image (img) and object within each image (id);
+and (ii) \code{summary} a data frame containing the values for each image. If
+more than one object is detected in a given image, the number of objects
+(\code{n}), total area (\code{area_sum}), mean area (\code{area_mean}) and the standard
+deviation of the area (\code{area_sd}) will be computed. For the other measures
+(perimeter and radius), the mean values are presented.
+}
 \item \code{plot_measures()} returns a \code{NULL} object, drawing the text according to
 the x and y coordinates of the objects in \code{object}.
 }
@@ -79,8 +108,8 @@ current plot. The object identification (\code{"id"}) is drawn by default.
 \examples{
 \donttest{
 library(pliman)
-img <- image_import(image_pliman("objects_300dpi.jpg"))
-image_show(img)
+img <- image_pliman("objects_300dpi.jpg")
+plot(img)
 # Image with four objects with a known resolution of 300 dpi
 # Higher square: 10 x 10 cm
 # Lower square: 5 x 5 cm
@@ -89,7 +118,7 @@ image_show(img)
 
 # Count the objects using the blue band to segment the image
 results <-
-   count_objects(img,
+   analyze_objects(img,
                  index = "B")
 plot_measures(results, measure = "id")
 
