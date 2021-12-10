@@ -18,6 +18,7 @@ get_measures(
 
 plot_measures(
   object,
+  id = NULL,
   measure = "id",
   hjust = NULL,
   vjust = NULL,
@@ -137,4 +138,7 @@ get_measures(results,
              id = 1,
              area ~ 100)
 }
+}
+\author{
+Tiago Olivoto \email{tiagoolivoto@gmail.com}
 }

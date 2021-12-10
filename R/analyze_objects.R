@@ -41,7 +41,6 @@
 #'   = "1"`) will select images that are named as 1.-, 2.-, and so on. An error
 #'   will be returned if the pattern matches any file that is not supported
 #'   (e.g., img1.pdf).
-#' @param img_pattern Deprecated. Use `pattern` instead.
 #' @param parallel If `TRUE` processes the images asynchronously (in parallel)
 #'   in separate R sessions running in the background on the same machine. It
 #'   may speed up the processing time, especially when `pattern` is used is
@@ -86,9 +85,11 @@
 #'   operation involving them, e.g., `object_index = "R/B"`. In this case, it
 #'   will return for each object in the image, the average value of the R/B
 #'   ratio. Use [pliman_indexes_eq()] to see the equations of available indexes.
-#' @param threshold A numeric value for the segmentation threshold.  By default,
-#'   a threshold value based on Otsu's method is used to reduce the grayscale
-#'   image to a binary image.
+#' @param threshold By default (`threshold = "Otsu"`), a threshold value based
+#'   on Otsu's method is used to reduce the grayscale image to a binary image.
+#'   If a numeric value is informed, this value will be used as a threshold.
+#'   Inform any non-numeric value different than "Otsu" to iteratively chosen
+#'   the threshold based on a raster plot showing pixel intensity of the index.
 #' @param tolerance The minimum height of the object in the units of image
 #'   intensity between its highest point (seed) and the point where it contacts
 #'   another object (checked for every contact pixel). If the height is smaller
@@ -108,11 +109,11 @@
 #' @param topn_lower,topn_upper Select the top `n` objects based on its area.
 #'   `topn_lower` selects the `n` elements with the smallest area whereas
 #'   `topn_upper` selects the `n` objects with the largest area.
-#' @param lower_eccent,upper_eccent Lower and upper limit for object
-#'   eccentricity for the image analysis. Users may use these arguments to
-#'   remove objects such as square papers for scale (low eccentricity) or cut
-#'   petioles (high eccentricity) from the images. Defaults to `NULL` (i.e., no
-#'   lower and upper limits).
+#' @param lower_eccent,upper_eccent,lower_circ,upper_circ Lower and upper limit
+#'   for object eccentricity/circularity for the image analysis. Users may use
+#'   these arguments to remove objects such as square papers for scale (low
+#'   eccentricity) or cut petioles (high eccentricity) from the images. Defaults
+#'   to `NULL` (i.e., no lower and upper limits).
 #' @param randomize Randomize the lines before training the model?
 #' @param nrows The number of lines to be used in training step. Defaults to
 #'   2000.
@@ -191,6 +192,10 @@
 #' @export
 #' @name analyze_objects
 #' @importFrom  utils install.packages
+#' @importFrom grDevices col2rgb dev.off jpeg png
+#' @importFrom graphics lines par points rect text
+#' @importFrom stats aggregate binomial glm kmeans predict sd
+#' @importFrom utils menu
 #' @md
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
@@ -214,7 +219,6 @@ analyze_objects <- function(img,
                             foreground = NULL,
                             background = NULL,
                             pattern = NULL,
-                            img_pattern = NULL,
                             parallel = FALSE,
                             workers = NULL,
                             watershed = TRUE,
@@ -236,6 +240,8 @@ analyze_objects <- function(img,
                             topn_upper = NULL,
                             lower_eccent = NULL,
                             upper_eccent = NULL,
+                            lower_circ = NULL,
+                            upper_circ = NULL,
                             randomize = TRUE,
                             nrows = 2000,
                             show_image = TRUE,
@@ -256,11 +262,7 @@ analyze_objects <- function(img,
                             dir_original = NULL,
                             dir_processed = NULL,
                             verbose = TRUE){
-  # check_ebi()
-  if(!missing(img_pattern)){
-    warning("Argument 'img_pattern' is deprecated. Use 'pattern' instead.", call. = FALSE)
-    pattern <- img_pattern
-  }
+  check_ebi()
   if(!object_size %in% c("small", "medium", "large", "elarge")){
     stop("'object_size' must be one of 'small', 'medium', 'large', or 'elarge'")
   }
@@ -447,6 +449,12 @@ analyze_objects <- function(img,
       if(!is.null(upper_eccent)){
         shape <- shape[shape$eccentricity < upper_eccent, ]
       }
+      if(!is.null(lower_circ)){
+        shape <- shape[shape$circularity > lower_circ, ]
+      }
+      if(!is.null(upper_circ)){
+        shape <- shape[shape$circularity < upper_circ, ]
+      }
       object_contour <- object_contour[shape$id]
       if(!is.null(object_index)){
         if(!is.character(object_index)){
@@ -455,7 +463,7 @@ analyze_objects <- function(img,
         ind_formula <- object_index
         data_mask <- nmask@.Data
         get_rgb <- function(img, data_mask, index){
-          data.frame(object = index,
+          data.frame(id = index,
                      R = img@.Data[,,1][which(data_mask == index)],
                      G = img@.Data[,,2][which(data_mask == index)],
                      B = img@.Data[,,3][which(data_mask == index)])
@@ -481,11 +489,11 @@ analyze_objects <- function(img,
                       get_rgb(img, data_mask, i)
                     }))
         }
-        object_rgb <- subset(object_rgb, object %in% shape$id)
-        # indexes by object
+        object_rgb <- subset(object_rgb, id %in% shape$id)
+        # indexes by id
         indexes <-
           by(object_rgb,
-             INDICES = object_rgb$object,
+             INDICES = object_rgb$id,
              FUN = function(x){
                data.frame(
                  do.call(cbind,
@@ -500,9 +508,9 @@ analyze_objects <- function(img,
           do.call(rbind,
                   lapply(indexes, data.frame)
           )
-        indexes <- data.frame(cbind(object = object_rgb$object, indexes))
-        colnames(indexes) <- c("object", ind_formula)
-        indexes <- aggregate(. ~ object, indexes, mean, na.rm = TRUE)
+        indexes <- data.frame(cbind(id = object_rgb$id, indexes))
+        colnames(indexes) <- c("id", ind_formula)
+        indexes <- aggregate(. ~ id, indexes, mean, na.rm = TRUE)
       } else{
         object_rgb <- NULL
         indexes <- NULL
@@ -739,8 +747,15 @@ analyze_objects <- function(img,
 
 #' @name analyze_objects
 #' @param x An object of class `anal_obj`.
-#' @param facet Create a facet plot for each object. Defaults to `FALSE`.
-#' @param ... Currently not used
+#' @param which Which to plot. Either 'measure' (object measures) or 'index'
+#'   (object index). Defaults to `"measure"`.
+#' @param measure The measure to plot. Defaults to `"area"`.
+#' @param type The type of plot. Either `"hist"` or `"density"`. Partial matches
+#'   are recognized.
+#' @param facet Create a facet plot for each object when `which = "index"` is
+#'   used?. Defaults to `FALSE`.
+#' @param ... Further argument passed on to [lattice::histogram()] or
+#'   [lattice::densityplot()]
 #' @method plot anal_obj
 #' @importFrom lattice densityplot levelplot
 #' @export
@@ -752,45 +767,83 @@ analyze_objects <- function(img,
 #' library(pliman)
 #'
 #' img <- image_pliman("soy_green.jpg")
-#' # Segment the foreground (grains) using the normalized blue index (NB)
+#' # Segment the foreground (grains) using the normalized blue index (NB, default)
 #' # Shows the average value of the blue index in each object
 #'
 #' rgb <-
 #'    analyze_objects(img,
 #'                    marker = "id",
-#'                    index = "NB", # default
 #'                    object_index = "B")
+#' # density of area
 #' plot(rgb)
-#' plot(rgb, facet = TRUE)
+#'
+#' # histogram of perimeter
+#' plot(rgb, measure = "perimeter", type = "histogram") # or 'hist'
+#'
+#' # density of the blue (B) index
+#' plot(rgb, which = "index")
 #' }
-plot.anal_obj <- function(x, facet = FALSE, ...){
-  rgb <- x$object_rgb
-  if(is.null(rgb)){
-    stop("RGB values not found. Use `object_index` in the function `analyze_objects()`.", call. = FALSE)
+plot.anal_obj <- function(x,
+                          which = "measure",
+                          measure = "area",
+                          type = "density",
+                          facet = FALSE,
+                          ...){
+  if(!which %in% c("measure", "index")){
+    stop("'which' must be one of 'measure' or 'index'", call. = FALSE)
   }
-  rgb$id <- rownames(rgb)
-  rgb <-
-    reshape(rgb,
-            direction = "long",
-            varying = list(names(rgb)[2:4]),
-            v.names = "value",
-            idvar = "id",
-            timevar = "Spectrum",
-            times = c("r", "g", "b"))
-  rgb$Spectrum <- factor( rgb$Spectrum, levels = unique( rgb$Spectrum))
-  if(isTRUE(facet)){
-    densityplot(~value | factor(object),
-                data = rgb,
-                groups = Spectrum,
-                par.settings = list(superpose.line = list(col = c("red", "green","blue"))),
-                xlab = "Pixel value",
-                plot.points = FALSE)
+  if(which == "measure"){
+    nam <- colnames(x$results)
+    if(!measure %in% nam){
+      stop("Measure '", measure, "' not available in 'x'. Try one of the '",
+           paste0(nam, collapse = ", "), call. = FALSE)
+    }
+    temp <- x$results[[measure]]
+    types <- c("density", "histogram")
+    matches <- grepl(type, types)
+    type <- types[matches]
+    if(type == "histogram"){
+      lattice::histogram(temp,
+                         type = "count",
+                         xlab = paste(measure, "(pixels)"),
+                         ...)
+    } else{
+      lattice::densityplot(temp,
+                           xlab = paste(measure, "(pixels)"),
+                           col = "blue",
+                           ...)
+    }
   } else{
-    densityplot(~value,
-                data = rgb,
-                groups = Spectrum,
-                par.settings = list(superpose.line = list(col = c("red", "green","blue"))),
-                xlab = "Pixel value",
-                plot.points = FALSE)
+    rgb <- x$object_rgb
+    if(is.null(rgb)){
+      stop("RGB values not found. Use `object_index` in the function `analyze_objects()`.", call. = FALSE)
+    }
+    rgb$id <- rownames(rgb)
+    rgb <-
+      reshape(rgb,
+              direction = "long",
+              varying = list(names(rgb)[2:4]),
+              v.names = "value",
+              idvar = "id",
+              timevar = "Spectrum",
+              times = c("r", "g", "b"))
+    rgb$Spectrum <- factor( rgb$Spectrum, levels = unique( rgb$Spectrum))
+    if(isTRUE(facet)){
+      densityplot(~value | factor(id),
+                  data = rgb,
+                  groups = Spectrum,
+                  par.settings = list(superpose.line = list(col = c("red", "green","blue"))),
+                  xlab = "Pixel value",
+                  plot.points = FALSE,
+                  ...)
+    } else{
+      densityplot(~value,
+                  data = rgb,
+                  groups = Spectrum,
+                  par.settings = list(superpose.line = list(col = c("red", "green","blue"))),
+                  xlab = "Pixel value",
+                  plot.points = FALSE,
+                  ...)
+    }
   }
 }

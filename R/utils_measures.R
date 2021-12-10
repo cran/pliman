@@ -60,6 +60,7 @@
 #' the x and y coordinates of the objects in `object`.
 #' @export
 #' @importFrom stats as.formula
+#' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
 #' \donttest{
 #' library(pliman)
@@ -156,7 +157,7 @@ get_measures <- function(object,
       res$diam_min <- res$diam_min * px_side
       res$diam_max <- res$diam_max * px_side
       res$major_axis <- res$major_axis * px_side
-      res$minor_axis <- res$major_axis * px_side
+      res$minor_axis <- res$minor_axis * px_side
     }
     if(var != "area"){
       id_val <- res[which(res$id == id), var]
@@ -171,7 +172,7 @@ get_measures <- function(object,
       res$diam_min <- res$diam_min * px_side
       res$diam_max <- res$diam_max * px_side
       res$major_axis <- res$major_axis * px_side
-      res$minor_axis <- res$major_axis * px_side
+      res$minor_axis <- res$minor_axis * px_side
     }
     if(verbose == TRUE){
       cat("-----------------------------------------\n")
@@ -195,7 +196,7 @@ get_measures <- function(object,
     res$diam_min <- res$diam_min / dpc
     res$diam_max <- res$diam_max / dpc
     res$major_axis <- res$major_axis / dpc
-    res$minor_axis <- res$major_axis / dpc
+    res$minor_axis <- res$minor_axis / dpc
   }
   if("img" %in% names(res)){
     smr <-
@@ -251,6 +252,7 @@ get_measures <- function(object,
 #' @name utils_measures
 #' @export
 plot_measures <- function(object,
+                          id = NULL,
                           measure = "id",
                           hjust = NULL,
                           vjust = NULL,
@@ -270,6 +272,12 @@ plot_measures <- function(object,
   } else{
     stop("Object of ivalid class.")
   }
+  if(is.null(id)){
+    id <- object$id
+  } else{
+    id <- id
+  }
+  object <- object[which(object$id %in% id), ]
   if(measure %in% colnames(object)){
     hjust <- ifelse(is.null(hjust), 0, hjust)
     vjust <- ifelse(is.null(vjust), 0, vjust)
@@ -287,7 +295,7 @@ plot_measures <- function(object,
       }
       text(x = object[,2],
            y = object[,3],
-           labels = round(index[, which(colnames(index) == measure)], digits),
+           labels = round(index[object$id , which(colnames(index) == measure)], digits),
            col = col,
            cex = size,
            ...)
@@ -296,3 +304,104 @@ plot_measures <- function(object,
     }
   }
 }
+
+
+
+#' Summary an object index
+#'
+#' Performs a report of the index between and within objects when `object_index`
+#' argument is used in `analyze_objects()`. By using a cut point, the number and
+#' proportion of objects with mean value of `index` bellow and above `cut_point`
+#' are returned. Additionaly, the number and proportion of pixels bellow and
+#' above the cutpoint is shown for each object (id).
+#'
+#' @param object An object computed with [analyze_objects()].
+#' @param index The index desired, e.g., `"B"`. Note that these value must match
+#'   the index(es) used in the argument `object_index` of `analyze_objects()`.
+#' @param cut_point The cut point.
+#' @param select_higher If `FALSE` (default) selects the objects with `index`
+#'   smaller than the `cut_point`. Use `select_higher = TRUE` to select the
+#'   objects with `index` higher than `cut_point`.
+#'
+#' @return A list with the following elements:
+#' * `ids` The identification of selected objects.
+#' * `between_id` A data frame with the following columns
+#'    - `n` The number of objects.
+#'    - `nsel` The number of selected objects.
+#'    - `prop` The proportion of objects selected.
+#'    - `mean_index_sel`, and `mean_index_nsel` The mean value of `index` for the
+#' selected and non-selected objects, respectively.
+#' * `within_id` A data frame with the following columns
+#'    - `id` The object identification
+#'    - `n_less` The number of pixels with values lesser than or equal to
+#'    `cut_point`.
+#'    - `n_greater` The number of pixels with values greater than `cut_point`.
+#'    - `less_ratio` The proportion of pixels with values lesser than or equal to
+#'    `cut_point`.
+#'    - `greater_ratio` The proportion of pixels with values greater than
+#'    `cut_point`.
+#' @importFrom stats setNames
+#' @export
+#' @name summary_index
+#' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
+#'
+#' @examples
+#' library(pliman)
+#' soy <- image_pliman("soy_green.jpg")
+#' anal <- analyze_objects(soy, object_index = "G")
+#' plot_measures(anal, measure = "G")
+#'
+#' summary_index(anal, index = "G", cut_point = 0.5)
+summary_index <- function(object,
+                         index,
+                         cut_point,
+                         select_higher = FALSE){
+  if(is.null(object$object_index)){
+    stop("'object' was not computed using the `object_index` argument.")
+  }
+  coords <- object$results[2:3]
+  obj_in <- object$object_index
+
+  if(isFALSE(select_higher)){
+    ids <- which(obj_in[[index]] <= cut_point)
+  } else{
+    ids <- which(obj_in[[index]] >= cut_point)
+  }
+
+  temp <- object$object_rgb
+  indexes <-
+    do.call(rbind,
+            lapply(  by(temp,
+                        INDICES = temp$id,
+                        FUN = function(x){
+                          x[[index]] <= cut_point
+                        }
+            ), data.frame)
+    )
+  res <-
+    transform(temp,
+              threshold = ifelse(indexes[[1]] == TRUE, "less", "greater"),
+              n = 1:nrow(indexes)) %>%
+    aggregate(n ~ id + threshold, FUN = length, data = .) %>%
+    reshape(direction = "wide",
+            timevar = "threshold",
+            idvar = "id",
+            v.names = "n") %>%
+    as.data.frame() %>%
+    setNames(c("id", "n_greater", "n_less")) %>%
+    transform(less_ratio = round(n_less / (n_less  + n_greater), 3),
+              greater_ratio = 1 - round(n_less / (n_less  + n_greater), 3))
+
+
+  list(ids = ids,
+       between_id = data.frame(
+         n = nrow(obj_in),
+         nsel = length(ids),
+         prop = length(ids) / nrow(obj_in),
+         mean_index_sel = mean(obj_in[[index]][ids]),
+         mean_index_nsel = mean(obj_in[[index]][!obj_in$id %in% ids])
+       ),
+       within_id = cbind(coords, res)[, c(3, 1, 2, 5, 4, 6, 7)]
+  )
+}
+

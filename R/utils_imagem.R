@@ -80,6 +80,8 @@ image_combine <- function(...,
 #'   character with the image name (e.g., "img1") or name and extension (e.g.,
 #'   "img1.jpg"). If none file extension is provided, the image will be saved as
 #'   a *.jpg file.
+#' @param prefix A prefix to include in the image name when exporting a list of
+#'   images. Defaults to `""`, i.e., no prefix.
 #' @param extension When `image` is a list, `extension` can be used to define
 #'   the extension of exported files. This will overwrite the file extensions
 #'   given in `image`.
@@ -90,7 +92,6 @@ image_combine <- function(...,
 #'   = "1"`) will select images that are named as 1.-, 2.-, and so on. An error
 #'   will be returned if the pattern matches any file that is not supported
 #'   (e.g., img1.pdf).
-#' @param img_pattern Deprecated. Use `pattern` instead.
 #' @param subfolder Optional character string indicating a subfolder within the
 #'   current working directory to save the image(s). If the folder doesn't
 #'   exist, it will be created.
@@ -125,13 +126,7 @@ image_import <- function(image,
                          path = NULL,
                          plot = FALSE,
                          nrow = NULL,
-                         ncol = NULL,
-                         img_pattern = NULL){
-  if(!missing(img_pattern)){
-    warning("Argument 'img_pattern' is deprecated. Use 'pattern' instead.",
-            call. = FALSE)
-    pattern <- img_pattern
-  }
+                         ncol = NULL){
   check_ebi()
   valid_extens <- c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF")
   if(!is.null(pattern)){
@@ -195,6 +190,7 @@ image_import <- function(image,
 #' @name utils_image
 image_export <- function(image,
                          name,
+                         prefix = "",
                          extension = NULL,
                          subfolder = NULL,
                          ...){
@@ -225,12 +221,18 @@ image_export <- function(image,
       if(dir.exists(dir_out) == FALSE){
         dir.create(dir_out, recursive = TRUE)
       }
-      names(image) <- paste0(dir_out, "/", name, ".", extens)
+      names(image) <- paste0(dir_out, "/", prefix, name, ".", extens)
+      a <-
+        lapply(seq_along(image), function(i){
+          EBImage::writeImage(x = image[[i]], files = names(image[i]), ...)
+        })
+    } else{
+      a <-
+        lapply(seq_along(image), function(i){
+          EBImage::writeImage(x = image[[i]], files = paste0(prefix, names(image[i])), ...)
+        })
     }
-    a <-
-      lapply(seq_along(image), function(i){
-        EBImage::writeImage(x = image[[i]], files = names(image[i]), ...)
-      })
+
   } else{
     filname <- file_name(name)
     extens <- unlist(file_extension(name))
@@ -251,16 +253,6 @@ image_export <- function(image,
     }
     name <- paste0(dir_out, "/", filname, ".", extens)
     EBImage::writeImage(image, name)
-  }
-}
-#' @export
-#' @name utils_image
-image_show <- function(image){
-  warning("'image_show()' is deprecated as of {pliman} 0.4.0. Use 'plot()' instead.", call. = FALSE)
-  if(any(class(image) != "Image")){
-    grid.raster(image)
-  } else{
-    plot(image)
   }
 }
 #' @export
@@ -2212,16 +2204,17 @@ image_to_mat <- function(image,
 }
 
 
-#' Create an image palette
+#' Create image palettes
 #'
-#' Creates image palettes by applying the k-means algorithm to the RGB values.
+#' `image_palette()`  creates image palettes by applying the k-means algorithm
+#' to the RGB values.
 #' @param image An image object.
 #' @param npal The number of color palettes.
 #' @param filter Performs median filtering. This can be useful to reduce the
 #'   noise in produced palettes. Defaults to `TRUE`. See more at
 #'   [image_filter()].
-#' @param blur Performs blurring filter of palettes?  Defaults to `FALSE`. See more at
-#'   [image_blur()].
+#' @param blur Performs blurring filter of palettes?  Defaults to `FALSE`. See
+#'   more at [image_blur()].
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time when `image` is a list. The number of sections is set
@@ -2229,15 +2222,23 @@ image_to_mat <- function(image,
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param verbose If `TRUE` (default) a summary is shown in the console.
-#' @return A list with `npal` color palettes of class `Image`.
+#' @return
+#' * `image_palette()` returns a list with `npal` color palettes of class `Image`.
+#' *
+#' @name palettes
 #' @export
 #' @examples
 #' \donttest{
 #' library(pliman)
 #'img <- image_pliman("sev_leaf_nb.jpg")
 #'pal <- image_palette(img, npal = 4)
-#'
 #'image_combine(pal)
+#'
+#'
+#'# runs only in an iterative section
+#' if(FALSE){
+#' image_palette_pick(img)
+#' }
 #'}
 image_palette <- function(image,
                           npal,
@@ -2290,6 +2291,7 @@ image_palette <- function(image,
     return(rgbs)
   }
 }
+
 
 #' Utilities for image resolution
 #'

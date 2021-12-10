@@ -10,7 +10,6 @@ analyze_objects(
   foreground = NULL,
   background = NULL,
   pattern = NULL,
-  img_pattern = NULL,
   parallel = FALSE,
   workers = NULL,
   watershed = TRUE,
@@ -32,6 +31,8 @@ analyze_objects(
   topn_upper = NULL,
   lower_eccent = NULL,
   upper_eccent = NULL,
+  lower_circ = NULL,
+  upper_circ = NULL,
   randomize = TRUE,
   nrows = 2000,
   show_image = TRUE,
@@ -54,7 +55,14 @@ analyze_objects(
   verbose = TRUE
 )
 
-\method{plot}{anal_obj}(x, facet = FALSE, ...)
+\method{plot}{anal_obj}(
+  x,
+  which = "measure",
+  measure = "area",
+  type = "density",
+  facet = FALSE,
+  ...
+)
 }
 \arguments{
 \item{img}{The image to be analyzed.}
@@ -69,8 +77,6 @@ directory that the name matches the pattern (e.g., img1.-, image1.-, im2.-)
 will be imported as a list. Providing any number as pattern (e.g., \code{pattern = "1"}) will select images that are named as 1.-, 2.-, and so on. An error
 will be returned if the pattern matches any file that is not supported
 (e.g., img1.pdf).}
-
-\item{img_pattern}{Deprecated. Use \code{pattern} instead.}
 
 \item{parallel}{If \code{TRUE} processes the images asynchronously (in parallel)
 in separate R sessions running in the background on the same machine. It
@@ -127,9 +133,11 @@ operation involving them, e.g., \code{object_index = "R/B"}. In this case, it
 will return for each object in the image, the average value of the R/B
 ratio. Use \code{\link[=pliman_indexes_eq]{pliman_indexes_eq()}} to see the equations of available indexes.}
 
-\item{threshold}{A numeric value for the segmentation threshold.  By default,
-a threshold value based on Otsu's method is used to reduce the grayscale
-image to a binary image.}
+\item{threshold}{By default (\code{threshold = "Otsu"}), a threshold value based
+on Otsu's method is used to reduce the grayscale image to a binary image.
+If a numeric value is informed, this value will be used as a threshold.
+Inform any non-numeric value different than "Otsu" to iteratively chosen
+the threshold based on a raster plot showing pixel intensity of the index.}
 
 \item{tolerance}{The minimum height of the object in the units of image
 intensity between its highest point (seed) and the point where it contacts
@@ -154,11 +162,11 @@ or equal 120 and less than or equal 140 will be considered.}
 \code{topn_lower} selects the \code{n} elements with the smallest area whereas
 \code{topn_upper} selects the \code{n} objects with the largest area.}
 
-\item{lower_eccent, upper_eccent}{Lower and upper limit for object
-eccentricity for the image analysis. Users may use these arguments to
-remove objects such as square papers for scale (low eccentricity) or cut
-petioles (high eccentricity) from the images. Defaults to \code{NULL} (i.e., no
-lower and upper limits).}
+\item{lower_eccent, upper_eccent, lower_circ, upper_circ}{Lower and upper limit
+for object eccentricity/circularity for the image analysis. Users may use
+these arguments to remove objects such as square papers for scale (low
+eccentricity) or cut petioles (high eccentricity) from the images. Defaults
+to \code{NULL} (i.e., no lower and upper limits).}
 
 \item{randomize}{Randomize the lines before training the model?}
 
@@ -211,9 +219,19 @@ e.g., \code{"/imgs"}.}
 
 \item{x}{An object of class \code{anal_obj}.}
 
-\item{facet}{Create a facet plot for each object. Defaults to \code{FALSE}.}
+\item{which}{Which to plot. Either 'measure' (object measures) or 'index'
+(object index). Defaults to \code{"measure"}.}
 
-\item{...}{Currently not used}
+\item{measure}{The measure to plot. Defaults to \code{"area"}.}
+
+\item{type}{The type of plot. Either \code{"hist"} or \code{"density"}. Partial matches
+are recognized.}
+
+\item{facet}{Create a facet plot for each object when \code{which = "index"} is
+used?. Defaults to \code{FALSE}.}
+
+\item{...}{Further argument passed on to \code{\link[lattice:histogram]{lattice::histogram()}} or
+\code{\link[lattice:histogram]{lattice::densityplot()}}}
 }
 \value{
 \code{analyze_objects()} returns a list with the following objects:
@@ -311,16 +329,21 @@ top$results
 library(pliman)
 
 img <- image_pliman("soy_green.jpg")
-# Segment the foreground (grains) using the normalized blue index (NB)
+# Segment the foreground (grains) using the normalized blue index (NB, default)
 # Shows the average value of the blue index in each object
 
 rgb <-
    analyze_objects(img,
                    marker = "id",
-                   index = "NB", # default
                    object_index = "B")
+# density of area
 plot(rgb)
-plot(rgb, facet = TRUE)
+
+# histogram of perimeter
+plot(rgb, measure = "perimeter", type = "histogram") # or 'hist'
+
+# density of the blue (B) index
+plot(rgb, which = "index")
 }
 }
 \references{

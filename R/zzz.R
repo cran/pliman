@@ -30,13 +30,13 @@
 NULL
 
 .onAttach <- function(libname, pkgname) {
-  vers <-  "1.0.0"
-  packageStartupMessage("|=======================================================|")
-  packageStartupMessage("| Tools for Plant Image Analysis (pliman ", vers,  ")         |")
-  packageStartupMessage("| Author: Tiago Olivoto                                 |")
-  packageStartupMessage("| Type 'vignette('pliman_start')' for a short tutorial  |")
-  packageStartupMessage("| Visit 'https://bit.ly/pliman' for a complete tutorial |")
-  packageStartupMessage("|=======================================================|")
+  vers <-  "1.1.0"
+  packageStartupMessage("|==========================================================|")
+  packageStartupMessage("| Tools for Plant Image Analysis (pliman ", vers,  ")            |")
+  packageStartupMessage("| Author: Tiago Olivoto                                    |")
+  packageStartupMessage("| Type 'vignette('pliman_start')' for a short tutorial     |")
+  packageStartupMessage("| Visit 'http://bit.ly/pkg_pliman' for a complete tutorial |")
+  packageStartupMessage("|==========================================================|")
   check_ebi()
 }
 
@@ -45,5 +45,5 @@ if (getRversion() >= "2.15.1") {
     c("Contorno", "display", "CODE", "dir_original" ,"dir_processada",
       "Spectrum", "value", "area", "id", ".", "object", "s.radius.max",
       "s.radius.min", "y", "s.area", "s.perimeter", "symptomatic", "m.eccentricity",
-      "m.majoraxis", "s.radius.mean"))
+      "m.majoraxis", "s.radius.mean", "n_greater", "n_less", "setNames"))
   }

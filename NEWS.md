@@ -1,3 +1,17 @@
+# pliman 1.1.0
+## New functions
+* `measure_disease_iter()` to measure disease in an interactive section.
+* `pick_count()` to count objects in an image manually.
+* `pick_palette()` to create an image palette by picking up color point(s) from the image
+* `pick_rgb()` to pick up the RGB values from selected point(s) in the image.
+* `summary_index()` to summary the index either between and within objects.
+* `pliman` now exports the foward-pipe operator `%>%`. Code from [poorman](https://github.com/nathaneastwood/poorman/blob/master/R/pipe.R) package.
+
+## Minor changes
+* Deprecated functions in the last version (`count_objects()`, `image_show()`, `leaf_area()`, `objects_rgb()`, `prop_segmented()`, and `symptomatic_area()`) were removed.
+* Use Bootstrap 5 from [pkgdown 2.0.0](https://pkgdown.r-lib.org/news/index.html#bootstrap-2-0-0) in the package site.
+
+
 # pliman 1.0.0
 ## New functions
 * `analyze_objects()` is now used as the main function to compute the number and shape of objects.
@@ -19,7 +33,7 @@
 * Improve `image_contrast()` function to avoid error regarding image resolution.
 * New argument `subfolder` in `image_export()` to export an image to a subfolder.
 * Now `EBImage` installation is checked when pliman is installed.
-* `image_import()` now returns the image object instead of the path to the image. So, it is not necessarily to call it within `image_import()`.
+* `image_pliman()` now returns the image object instead of the path to the image. So, it is not necessarily to call it within `image_import()`.
 
 # pliman 0.3.0
 ## New functions
