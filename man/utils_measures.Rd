@@ -8,18 +8,18 @@
 \usage{
 get_measures(
   object,
-  id = NULL,
   measure = NULL,
+  id = NULL,
   dpi = NULL,
   sep = "\\\\_|-",
   verbose = TRUE,
-  digits = 3
+  digits = 5
 )
 
 plot_measures(
   object,
-  id = NULL,
   measure = "id",
+  id = NULL,
   hjust = NULL,
   vjust = NULL,
   digits = 2,
@@ -30,8 +30,6 @@ plot_measures(
 }
 \arguments{
 \item{object}{An object computed with \code{\link[=analyze_objects]{analyze_objects()}}.}
-
-\item{id}{An object in the image to indicate a known value.}
 
 \item{measure}{For \code{plot_measures()}, a character string; for
 \code{get_measures()}, a two-sided formula, e.g., \code{measure = area ~ 100}
@@ -49,6 +47,8 @@ square, then the \code{radius_max} of such object according to the Pythagorean
 theorem will be \verb{L x sqrt(2) / 2} where \code{L} is the length of the square side.
 }}
 
+\item{id}{An object in the image to indicate a known value.}
+
 \item{dpi}{A known resolution of the image in DPI (dots per inch).}
 
 \item{sep}{Regular expression to manage file names. The function combines in
@@ -56,8 +56,8 @@ the \code{merge} object the object measures (sum of area and mean of all the
 other measures) of all images that share the same filename prefix, defined
 as the part of the filename preceding the first hyphen (-) or underscore
 (_) (no hyphen or underscore is required). For example, the measures of
-images named L1-1.jpeg, L1-2.jpeg, and L1-3.jpeg would be combined into a
-single image information (L1). This feature allows the user to treat
+images named \verb{L1-1.jpeg}, \verb{L1-2.jpeg}, and \verb{L1-3.jpeg} would be combined
+into a single image information (L1). This feature allows the user to treat
 multiple images as belonging to a single sample, if desired. Defaults to
 \code{sep = "\\\\_|-"}.}
 
@@ -80,11 +80,13 @@ respectively.}
 \itemize{
 \item For \code{get_measures()}, if \code{measure} is informed, the pixel values will be
 corrected by the value of the known object, given in the unit of the
-right-hand side of \code{measure}. If \code{dpi} is informed, then all the measures
-will be adjusted to the known \code{dpi}.
+right-hand side of \code{meae}. If \code{dpi} is informed, then all the measures
+will be adjusted to the knosurwn \code{dpi}.
+}
 \itemize{
 \item If applied to an object of class \code{anal_obj}, returns a data frame with the
 object \code{id} and the (corrected) measures.
+\itemize{
 \item If applied to an object of class \code{anal_obj_ls}, returns a list of class
 \code{measures_ls}, with two objects: (i) \code{results}, a data frame containing
 the identification of each image (img) and object within each image (id);
@@ -94,6 +96,8 @@ more than one object is detected in a given image, the number of objects
 deviation of the area (\code{area_sd}) will be computed. For the other measures
 (perimeter and radius), the mean values are presented.
 }
+}
+\itemize{
 \item \code{plot_measures()} returns a \code{NULL} object, drawing the text according to
 the x and y coordinates of the objects in \code{object}.
 }
@@ -120,7 +124,8 @@ plot(img)
 # Count the objects using the blue band to segment the image
 results <-
    analyze_objects(img,
-                 index = "B")
+                 index = "B",
+                 lower_noise = 0.1)
 plot_measures(results, measure = "id")
 
 # Get object measures by declaring the known resolution in dots per inch
@@ -138,6 +143,8 @@ get_measures(results,
              id = 1,
              area ~ 100)
 }
+
+
 }
 \author{
 Tiago Olivoto \email{tiagoolivoto@gmail.com}

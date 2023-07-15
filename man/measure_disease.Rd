@@ -11,12 +11,14 @@ measure_disease(
   img_symptoms = NULL,
   img_background = NULL,
   pattern = NULL,
+  filter = 10,
   parallel = FALSE,
   workers = NULL,
   resize = FALSE,
   fill_hull = TRUE,
   index_lb = NULL,
   index_dh = "GLI",
+  has_white_bg = FALSE,
   threshold = NULL,
   invert = FALSE,
   lower_size = NULL,
@@ -31,7 +33,7 @@ measure_disease(
   extension = NULL,
   show_features = FALSE,
   show_segmentation = FALSE,
-  show_image = TRUE,
+  plot = TRUE,
   show_original = TRUE,
   show_background = TRUE,
   show_contour = TRUE,
@@ -45,27 +47,46 @@ measure_disease(
   marker_size = NULL,
   save_image = FALSE,
   prefix = "proc_",
+  name = NULL,
   dir_original = NULL,
   dir_processed = NULL,
   verbose = TRUE
 )
 
-measure_disease_iter(img, has_background = TRUE, r = 5, ...)
+measure_disease_iter(
+  img,
+  has_background = TRUE,
+  r = 2,
+  viewer = get_pliman_viewer(),
+  show = "rgb",
+  index = "NGRDI",
+  ...
+)
 }
 \arguments{
 \item{img}{The image to be analyzed.}
 
-\item{img_healthy}{A color palette of healthy areas.}
+\item{img_healthy}{A color palette of healthy tissues.}
 
-\item{img_symptoms}{A color palette of lesioned areas.}
+\item{img_symptoms}{A color palette of lesioned tissues.}
 
-\item{img_background}{An optional color palette of the image background.}
+\item{img_background}{A color palette of the background (if exists). These
+arguments can be either an \code{Image} object stored in the global environment
+or a character value. If a chacarceter is used (eg., \code{img_healthy = "leaf"}), the function will search in the current working directory a valid
+image that contains "\verb{leaf"} in the name. Note that if two images matches
+this pattern, an error will occour.}
 
 \item{pattern}{A pattern of file name used to identify images to be
 processed. For example, if \code{pattern = "im"} all images that the name
 matches the pattern (e.g., img1.-, image1.-, im2.-) will be analyzed.
 Providing any number as pattern (e.g., \code{pattern = "1"}) will select
 images that are named as 1.-, 2.-, and so on.}
+
+\item{filter}{Performs median filtering in the binary image that segments the
+leaf from background? By default, a median filter of \code{size = 10} is applied.
+This is useful to reduce the noise and segment the leaf and background more
+accurately. See more at \code{\link[=image_filter]{image_filter()}}. Set to \code{FALSE} to cancel median
+filtering.}
 
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
@@ -90,6 +111,12 @@ considered in the computation of the severity.}
 \item{index_dh}{The index used to segment diseased from healthy tissues when
 \code{img_healthy} and \code{img_symptoms} are not declared. Defaults to \code{"GLI"}. See
 \code{\link[=image_index]{image_index()}} for more details.}
+
+\item{has_white_bg}{Logical indicating whether a white background is present.
+If \code{TRUE}, pixels that have R, G, and B values equals to 1 will be
+considered as \code{NA}. This may be useful to compute an image index for
+objects that have, for example, a white background. In such cases, the
+background will not be considered for the threshold computation.}
 
 \item{threshold}{By default (\code{threshold = NULL}), a threshold value based on
 Otsu's method is used to reduce the grayscale image to a binary image. If a
@@ -150,7 +177,7 @@ area, perimeter, and radius. Defaults to \code{FALSE}.}
 \item{show_segmentation}{Shows the object segmentation colored with random
 permutations. Defaults to \code{TRUE}.}
 
-\item{show_image}{Show image after processing? Defaults to \code{TRUE}.}
+\item{plot}{Show image after processing? Defaults to \code{TRUE}.}
 
 \item{show_original}{Show the symptoms in the original image?}
 
@@ -183,6 +210,9 @@ given in \code{img}.}
 \item{prefix}{The prefix to be included in the processed images. Defaults to
 \code{"proc_"}.}
 
+\item{name}{The name of the image to save. Use this to overwrite the name of
+the image in \code{img}.}
+
 \item{dir_original, dir_processed}{The directory containing the original and
 processed images. Defaults to \code{NULL}. In this case, the function will
 search for the image \code{img} in the current working directory. After
@@ -196,8 +226,23 @@ e.g., \code{"/imgs"}.}
 \item{has_background}{A logical indicating if the image has a background to
 be segmented before processing.}
 
-\item{r}{The radius of neighborhood pixels. Defaults to \code{5}. A square is
+\item{r}{The radius of neighborhood pixels. Defaults to \code{2}. A square is
 drawn indicating the selected pixels.}
+
+\item{viewer}{The viewer option. If not provided, the value is retrieved
+using \code{\link[=get_pliman_viewer]{get_pliman_viewer()}}. This option controls the type of viewer to use
+for interactive plotting. The available options are "base" and "mapview".
+If set to "base", the base R graphics system is used for interactive
+plotting. If set to "mapview", the mapview package is used. To set this
+argument globally for all functions in the package, you can use the
+\code{\link[=set_pliman_viewer]{set_pliman_viewer()}} function. For example, you can run
+\code{set_pliman_viewer("mapview")} to set the viewer option to "mapview" for
+all functions.}
+
+\item{show}{The show option for the mapview viewer, either \code{"rgb"} or
+\code{"index"}.}
+
+\item{index}{The index to be shown when \code{show = "rgb"}.}
 
 \item{...}{Further parameters passed on to \code{measure_disease()}.}
 }
@@ -254,6 +299,11 @@ click and continues until the user press Esc. Then, a new sampling process is
 performed to sample the color of healthy tissues and then diseased tissues.
 The generated palettes are then passed on to measure_disease(). All the
 arguments of such function can be passed using the ... (three dots).
+
+When \code{show_features = TRUE}, the function computes a total of 36 lesion
+features (23 shape features and 13 texture features). The Haralick texture
+features for each object based on a gray-level co-occurrence matrix (Haralick
+et al. 1979). See more details in \code{\link[=analyze_objects]{analyze_objects()}}.
 }
 \examples{
 \donttest{
@@ -268,7 +318,7 @@ sev <-
                  img_healthy = healthy,
                  img_symptoms = lesions,
                  lesion_size = "large",
-                 show_image = TRUE)
+                 plot = TRUE)
 
 # an interactive section
 measure_disease_iter(img)

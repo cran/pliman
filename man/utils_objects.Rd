@@ -9,11 +9,12 @@
 \title{Utilities for working with image objects}
 \usage{
 object_coord(
-  image,
+  img,
   id = NULL,
   index = "NB",
   watershed = TRUE,
   invert = FALSE,
+  filter = FALSE,
   fill_hull = FALSE,
   threshold = "Otsu",
   edge = 2,
@@ -22,13 +23,17 @@ object_coord(
   object_size = "medium",
   parallel = FALSE,
   workers = NULL,
-  show_image = TRUE
+  plot = TRUE
 )
 
 object_contour(
-  image,
+  img,
+  pattern = NULL,
+  dir_original = NULL,
+  center = FALSE,
   index = "NB",
   invert = FALSE,
+  filter = FALSE,
   fill_hull = FALSE,
   threshold = "Otsu",
   watershed = TRUE,
@@ -37,15 +42,16 @@ object_contour(
   object_size = "medium",
   parallel = FALSE,
   workers = NULL,
-  show_image = TRUE
+  plot = TRUE,
+  verbose = TRUE
 )
 
-object_isolate(image, id = NULL, parallel = FALSE, workers = NULL, ...)
+object_isolate(img, id = NULL, parallel = FALSE, workers = NULL, ...)
 
-object_id(image, parallel = FALSE, workers = NULL, ...)
+object_id(img, parallel = FALSE, workers = NULL, ...)
 }
 \arguments{
-\item{image}{An image of class \code{Image} or a list of \code{Image} objects.}
+\item{img}{An image of class \code{Image} or a list of \code{Image} objects.}
 
 \item{id}{\itemize{
 \item For \code{object_coord()}, a vector (or scalar) of object \code{id} to compute the
@@ -63,6 +69,11 @@ to a unique object. This is faster but is not able to segment touching
 objects.}
 
 \item{invert}{Inverts the binary image, if desired. Defaults to \code{FALSE}.}
+
+\item{filter}{Performs median filtering in the binary image? See more at
+\code{\link[=image_filter]{image_filter()}}. Defaults to \code{FALSE}. Use a positive integer to define the
+size of the median filtering. Larger values are effective at removing
+noise, but adversely affect edges.}
 
 \item{fill_hull}{Fill holes in the objects? Defaults to \code{FALSE}.}
 
@@ -86,8 +97,24 @@ up to 50\% of available cores.}
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}
 
-\item{show_image}{Shows the image with bounding rectangles? Defaults to
+\item{plot}{Shows the image with bounding rectangles? Defaults to
 \code{TRUE}.}
+
+\item{pattern}{A pattern of file name used to identify images to be imported.
+For example, if \code{pattern = "im"} all images in the current working directory
+that the name matches the pattern (e.g., img1.-, image1.-, im2.-) will be
+imported as a list. Providing any number as pattern (e.g., \code{pattern = "1"})
+will select images that are named as 1.-, 2.-, and so on. An error will be
+returned if the pattern matches any file that is not supported (e.g.,
+img1.pdf).}
+
+\item{dir_original}{The directory containing the original images. Defaults
+to \code{NULL}, which means that the current working directory will be
+considered.}
+
+\item{center}{If \code{TRUE} returns the object contours centered on the origin.}
+
+\item{verbose}{If \code{TRUE} (default) a summary is shown in the console.}
 
 \item{...}{\itemize{
 \item For \code{object_isolate()}, further arguments passed on to \code{\link[=object_coord]{object_coord()}}.

@@ -7,10 +7,13 @@
 \format{
 \verb{*.jpg} format
 \itemize{
+\item \code{flax_leaves.jpg} Flax leaves in a white background
+\item \code{flax_grains.jpg} Flax grains with background light.
 \item \code{la_back.jpg} A cyan palette representing the background of images
 la_pattern, la_leaves, and soybean_touch.
 \item \code{la_leaf.jpg} A sample of the leaves in \code{la_leaves}
 \item \code{la_leaves.jpg} Tree leaves with a sample of known area.
+\item \code{mult_leaves.jpg} Three soybean leaflets with soybean rust symptoms.
 \item \code{objects_300dpi.jpg} An image with 300 dpi resolution.
 \item \code{potato_leaves.jpg} Three potato leaves, which were gathered from Gupta et
 al. (2020).
@@ -19,10 +22,12 @@ al. (2020).
 \item \code{sev_back.jpg} A blue palette representing the background of \code{sev_leaf}.
 \item \code{sev_healthy.jpg} Healthy area of \code{sev_leaf}.
 \item \code{sev_sympt.jpg} The symptomatic area \code{sev_leaf}.
+\item \code{shadow.jpg} A shaded leaf, useful to test adaptive thresholding
 \item \code{soy_green.jpg} Soybean grains with a white background.
 \item \code{soybean_grain.jpg} A sample palette of the grains in \code{soy_green}.
 \item \code{soybean_touch.jpg} Soybean grains with a cyan background touching one each
 other.
+\item \code{field_mosaic.jpg} An UVA image from a soybean field.
 }
 }
 \source{

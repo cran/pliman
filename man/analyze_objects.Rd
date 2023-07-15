@@ -3,16 +3,34 @@
 \name{analyze_objects}
 \alias{analyze_objects}
 \alias{plot.anal_obj}
+\alias{analyze_objects_iter}
 \title{Analyzes objects in an image}
 \usage{
 analyze_objects(
   img,
   foreground = NULL,
   background = NULL,
+  pick_palettes = FALSE,
+  reference = FALSE,
+  reference_area = NULL,
+  back_fore_index = "R/(G/B)",
+  fore_ref_index = "B-R",
+  reference_larger = FALSE,
+  reference_smaller = FALSE,
   pattern = NULL,
   parallel = FALSE,
   workers = NULL,
   watershed = TRUE,
+  veins = FALSE,
+  sigma_veins = 1,
+  ab_angles = FALSE,
+  ab_angles_percentiles = c(0.25, 0.75),
+  haralick = FALSE,
+  har_nbins = 32,
+  har_scales = 1,
+  har_band = 1,
+  pcv = FALSE,
+  pcv_niter = 100,
   resize = FALSE,
   trim = FALSE,
   fill_hull = FALSE,
@@ -20,11 +38,17 @@ analyze_objects(
   invert = FALSE,
   object_size = "medium",
   index = "NB",
-  my_index = NULL,
   object_index = NULL,
+  pixel_level_index = FALSE,
+  return_mask = FALSE,
+  efourier = FALSE,
+  nharm = 10,
   threshold = "Otsu",
+  k = 0.1,
+  windowsize = NULL,
   tolerance = NULL,
   extension = NULL,
+  lower_noise = 0.1,
   lower_size = NULL,
   upper_size = NULL,
   topn_lower = NULL,
@@ -34,13 +58,14 @@ analyze_objects(
   lower_circ = NULL,
   upper_circ = NULL,
   randomize = TRUE,
-  nrows = 2000,
-  show_image = TRUE,
+  nrows = 1000,
+  plot = TRUE,
   show_original = TRUE,
   show_chull = FALSE,
   show_contour = TRUE,
   contour_col = "red",
   contour_size = 1,
+  show_lw = FALSE,
   show_background = TRUE,
   show_segmentation = FALSE,
   col_foreground = NULL,
@@ -59,32 +84,67 @@ analyze_objects(
   x,
   which = "measure",
   measure = "area",
-  type = "density",
-  facet = FALSE,
+  type = c("density", "histogram"),
   ...
 )
+
+analyze_objects_iter(pattern, known_area, verbose = TRUE, ...)
 }
 \arguments{
 \item{img}{The image to be analyzed.}
 
-\item{foreground}{A color palette of the foreground (optional).}
+\item{foreground, background}{A color palette for the foregrond and background,
+respectively (optional). If a chacarceter is used (eg., \code{foreground = "fore"}), the function will search in the current working directory a valid
+image named "fore".}
 
-\item{background}{A color palette of the background (optional).}
+\item{pick_palettes}{Logical argument indicating wheater the user needs to
+pick up the color palettes for foreground and background for the image. If
+\code{TRUE} \code{\link[=pick_palette]{pick_palette()}} will be called internally so that the user can sample
+color points representing foreground and background.}
+
+\item{reference}{Logical to indicate if a reference object is present in the
+image. This is useful to adjust measures when images are not obtained with
+standard resolution (e.g., field images). See more in the details section.}
+
+\item{reference_area}{The known area of the reference objects. The measures of
+all the objects in the image will be corrected using the same unit of the
+area informed here.}
+
+\item{back_fore_index}{A character value to indicate the index to segment the
+foreground (objects and reference) from the background. Defaults to
+\code{"R/(G/B)"}. This index is optimized to segment white backgrounds from green
+leaves and a blue reference object.}
+
+\item{fore_ref_index}{A character value to indicate the index to segment
+objects and the reference object. It can be either an available index in
+\code{pliman} (see \code{\link[=pliman_indexes]{pliman_indexes()}} or an own index computed with the R, G, and
+B bands. Defaults to \code{"B-R"}. This index is optimized to segment green
+leaves from a blue reference object after a white background has been
+removed.}
+
+\item{reference_larger, reference_smaller}{Logical argument indicating when the
+larger/smaller object in the image must be used as the reference object.
+This only is valid when \code{reference} is set to \code{TRUE} and \code{reference_area}
+indicates the area of the reference object. IMPORTANT. When
+\code{reference_smaller} is used, objects with an area smaller than 1\% of the
+mean of all the objects are ignored. This is used to remove possible noise
+in the image such as dust. So, be sure the reference object has an area that
+will be not removed by that cutpoint.}
 
 \item{pattern}{A pattern of file name used to identify images to be imported.
-For example, if \code{pattern = "im"} all images in the current working
-directory that the name matches the pattern (e.g., img1.-, image1.-, im2.-)
-will be imported as a list. Providing any number as pattern (e.g., \code{pattern = "1"}) will select images that are named as 1.-, 2.-, and so on. An error
-will be returned if the pattern matches any file that is not supported
-(e.g., img1.pdf).}
+For example, if \code{pattern = "im"} all images in the current working directory
+that the name matches the pattern (e.g., img1.-, image1.-, im2.-) will be
+imported as a list. Providing any number as pattern (e.g., \code{pattern = "1"})
+will select images that are named as 1.-, 2.-, and so on. An error will be
+returned if the pattern matches any file that is not supported (e.g.,
+img1.pdf).}
 
-\item{parallel}{If \code{TRUE} processes the images asynchronously (in parallel)
-in separate R sessions running in the background on the same machine. It
-may speed up the processing time, especially when \code{pattern} is used is
-informed. When \code{object_index} is informed, multiple sections will be used
-to extract the RGB values for each object in the image. This may
-significantly speed up processing time when an image has lots of objects
-(say >1000).}
+\item{parallel}{If \code{TRUE} processes the images asynchronously (in parallel) in
+separate R sessions running in the background on the same machine. It may
+speed up the processing time, especially when \code{pattern} is used is informed.
+When \code{object_index} is informed, multiple sections will be used to extract
+the RGB values for each object in the image. This may significantly speed up
+processing time when an image has lots of objects (say >1000).}
 
 \item{workers}{A positive numeric scalar or a function specifying the number
 of parallel processes that can be active at the same time. By default, the
@@ -96,9 +156,45 @@ If \code{FALSE}, all pixels for each connected set of foreground pixels are set
 to a unique object. This is faster but is not able to segment touching
 objects.}
 
+\item{veins}{Logical argument indicating whether vein features are computed.
+This will call \code{\link[=object_edge]{object_edge()}} and applies the Sobel-Feldman Operator to
+detect edges. The result is the proportion of edges in relation to the
+entire area of the object(s) in the image. Note that \strong{THIS WILL BE AN
+OPERATION ON AN IMAGE LEVEL, NOT OBJECT!}.}
+
+\item{sigma_veins}{Gaussian kernel standard deviation used in the gaussian
+blur in the edge detection algorithm}
+
+\item{ab_angles}{Logical argument indicating whether apex and base angles
+should be computed. Defaults to \code{FALSE}. If \code{TRUE}, \code{poly_apex_base_angle()}
+are called and the base and apex angles are computed considering the 25th
+and 75th percentiles of the object height. These percentiles can be changed
+with the argument \code{ab_angles_percentiles}.}
+
+\item{ab_angles_percentiles}{The percentiles indicating the heights of the
+object for which the angle should be computed (from the apex and the
+bottom). Defaults to c(0.25, 0.75), which means considering the 25th and
+75th percentiles of the object height.}
+
+\item{haralick}{Logical value indicating whether Haralick features are
+computed. Defaults to \code{FALSE}.}
+
+\item{har_nbins}{An integer indicating the number of bins using to compute the
+Haralick matrix. Defaults to 32. See Details}
+
+\item{har_scales}{A integer vector indicating the number of scales to use to
+compute the Haralick features. See Details.}
+
+\item{har_band}{The band to compute the Haralick features (1 = R, 2 = G, 3 =
+B). Defaults to 1.}
+
+\item{pcv}{Computes the Perimeter Complexity Value? Defaults to \code{FALSE}.}
+
+\item{pcv_niter}{An integer specifying the number of smoothing iterations for
+computing the  Perimeter Complexity Value. Defaults to 100.}
+
 \item{resize}{Resize the image before processing? Defaults to \code{FALSE}. Use a
-numeric value of range 0-100 (proportion of the size of the original
-image).}
+numeric value of range 0-100 (proportion of the size of the original image).}
 
 \item{trim}{Number of pixels removed from edges in the analysis. The edges of
 images are often shaded, which can affect image analysis. The edges of
@@ -111,21 +207,29 @@ the background. IMPORTANT: Objects touching each other can be combined into
 one single object, which may underestimate the number of objects in an
 image.}
 
-\item{filter}{Performs median filtering after image processing? defaults to
-\code{FALSE}. See more at \code{\link[=image_filter]{image_filter()}}.}
+\item{filter}{Performs median filtering in the binary image? See more at
+\code{\link[=image_filter]{image_filter()}}. Defaults to \code{FALSE}. Use a positive integer to define the
+size of the median filtering. Larger values are effective at removing noise,
+but adversely affect edges.}
 
-\item{invert}{Inverts the binary image, if desired. This is useful to process
-images with black background. Defaults to \code{FALSE}.}
+\item{invert}{Inverts the binary image if desired. This is useful to process
+images with a black background. Defaults to \code{FALSE}. If \code{reference = TRUE}
+is use, \code{invert} can be declared as a logical vector of length 2 (eg.,
+\verb{invert = c(FALSE, TRUE}). In this case, the segmentation of objects and
+reference from the foreground using \code{back_fore_index} is performed using the
+default (not inverted), and the segmentation of objects from the reference
+is performed by inverting the selection (selecting pixels higher than the
+threshold).}
 
 \item{object_size}{The size of the object. Used to automatically set up
 \code{tolerance} and \code{extension} parameters. One of the following. \code{"small"}
-(e.g, wheat grains), \code{"medium"} (e.g, soybean grains), \code{"large"}(e.g,
-peanut grains), and \code{"elarge"} (e.g, soybean pods)`.}
+(e.g, wheat grains), \code{"medium"} (e.g, soybean grains), \code{"large"}(e.g, peanut
+grains), and \code{"elarge"} (e.g, soybean pods)`.}
 
-\item{index, my_index}{A character value specifying the target mode for
-conversion to binary image when \code{foreground} and \code{background} are not
-declared. Defaults to \code{"NB"} (normalized blue). See \code{\link[=image_index]{image_index()}} for
-more details.}
+\item{index}{A character value specifying the target mode for conversion to
+binary image when \code{foreground} and \code{background} are not declared. Defaults
+to \code{"NB"} (normalized blue). See \code{\link[=image_index]{image_index()}} for more details. User can
+also calculate your own index using the bands names, e.g. \code{index = "R+B/G"}}
 
 \item{object_index}{Defaults to \code{FALSE}. If an index is informed, the average
 value for each object is returned. It can be the R, G, and B values or any
@@ -133,11 +237,38 @@ operation involving them, e.g., \code{object_index = "R/B"}. In this case, it
 will return for each object in the image, the average value of the R/B
 ratio. Use \code{\link[=pliman_indexes_eq]{pliman_indexes_eq()}} to see the equations of available indexes.}
 
-\item{threshold}{By default (\code{threshold = "Otsu"}), a threshold value based
-on Otsu's method is used to reduce the grayscale image to a binary image.
-If a numeric value is informed, this value will be used as a threshold.
-Inform any non-numeric value different than "Otsu" to iteratively chosen
-the threshold based on a raster plot showing pixel intensity of the index.}
+\item{pixel_level_index}{Return the indexes computed in \code{object_index} in the
+pixel level? Defaults to \code{FALSE} to avoid returning large data.frames.}
+
+\item{return_mask}{Returns the mask for the analyzed image? Defaults to \code{FALSE}.}
+
+\item{efourier}{Logical argument indicating if Elliptical Fourier should be
+computed for each object. This will call \code{\link[=efourier]{efourier()}} internally. It
+\code{efourier = TRUE} is used, both standard and normalized Fourier coefficients
+are returned.}
+
+\item{nharm}{An integer indicating the number of harmonics to use. Defaults to
+10. For more details see \code{\link[=efourier]{efourier()}}.}
+
+\item{threshold}{The theshold method to be used.
+\itemize{
+\item By default (\code{threshold = "Otsu"}), a threshold value based
+on Otsu's method is used to reduce the grayscale image to a binary image. If
+a numeric value is informed, this value will be used as a threshold.
+\item If \code{threshold = "adaptive"}, adaptive thresholding (Shafait et al. 2008)
+is used, and will depend on the \code{k} and \code{windowsize} arguments.
+\item If any non-numeric value different than \code{"Otsu"} and \code{"adaptive"} is used,
+an iterative section will allow you to choose the threshold based on a
+raster plot showing pixel intensity of the index.
+}}
+
+\item{k}{a numeric in the range 0-1. when \code{k} is high, local threshold
+values tend to be lower. when \code{k} is low, local threshold value tend to be
+higher.}
+
+\item{windowsize}{windowsize controls the number of local neighborhood in
+adaptive thresholding. By default it is set to \code{1/3 * minxy}, where
+\code{minxy} is the minimum dimension of the image (in pixels).}
 
 \item{tolerance}{The minimum height of the object in the units of image
 intensity between its highest point (seed) and the point where it contacts
@@ -148,15 +279,20 @@ which is the highest.}
 \item{extension}{Radius of the neighborhood in pixels for the detection of
 neighboring objects. Higher value smooths out small objects.}
 
+\item{lower_noise}{To prevent noise from affecting the image analysis, objects
+with lesser than 10\% of the mean area of all objects are removed
+(\code{lower_noise = 0.1}). Increasing this value will remove larger noises (such
+as dust points), but can remove desired objects too. To define an explicit
+lower or upper size, use the \code{lower_size} and \code{upper_size} arguments.}
+
 \item{lower_size, upper_size}{Lower and upper limits for size for the image
-analysis. Plant images often contain dirt and dust. To prevent dust from
-affecting the image analysis, objects with lesser than 10\% of the mean of
-all objects are removed. Upper limit is set to \code{NULL}, i.e., no upper
-limit used. One can set a known area or use \code{lower_limit = 0} to select all
-objects (not advised). Objects that matches the size of a given range of
-sizes can be selected by setting up the two arguments. For example, if
-\code{lower_size = 120} and \code{upper_size = 140}, objects with size greater than
-or equal 120 and less than or equal 140 will be considered.}
+analysis. Plant images often contain dirt and dust.  Upper limit is set to
+\code{NULL}, i.e., no upper limit used. One can set a known area or use
+\code{lower_limit = 0} to select all objects (not advised). Objects that matches
+the size of a given range of sizes can be selected by setting up the two
+arguments. For example, if \code{lower_size = 120} and \code{upper_size = 140},
+objects with size greater than or equal 120 and less than or equal 140 will
+be considered.}
 
 \item{topn_lower, topn_upper}{Select the top \code{n} objects based on its area.
 \code{topn_lower} selects the \code{n} elements with the smallest area whereas
@@ -173,18 +309,21 @@ to \code{NULL} (i.e., no lower and upper limits).}
 \item{nrows}{The number of lines to be used in training step. Defaults to
 2000.}
 
-\item{show_image}{Show image after processing?}
+\item{plot}{Show image after processing?}
 
 \item{show_original}{Show the count objects in the original image?}
 
 \item{show_chull}{Show the convex hull around the objects? Defaults to
 \code{FALSE}.}
 
-\item{show_contour}{Show a contour line around the objects? Defaults
-to \code{TRUE}.}
+\item{show_contour}{Show a contour line around the objects? Defaults to
+\code{TRUE}.}
 
-\item{contour_col, contour_size}{The color and size for the contour line
-around objects. Defaults to \code{contour_col = "red"} and \code{contour_size = 1}.}
+\item{contour_col, contour_size}{The color and size for the contour line around
+objects. Defaults to \code{contour_col = "red"} and \code{contour_size = 1}.}
+
+\item{show_lw}{If \code{TRUE}, plots the length and width lines on each object
+calling \code{\link[=plot_lw]{plot_lw()}}.}
 
 \item{show_background}{Show the background? Defaults to \code{TRUE}. A white
 background is shown by default when \code{show_original = FALSE}.}
@@ -208,12 +347,11 @@ given in \code{img}.}
 \code{"proc_"}.}
 
 \item{dir_original, dir_processed}{The directory containing the original and
-processed images. Defaults to \code{NULL}. In this case, the function will
-search for the image \code{img} in the current working directory. After
-processing, when \code{save_image = TRUE}, the processed image will be also
-saved in such a directory. It can be either a full path, e.g.,
-\code{"C:/Desktop/imgs"}, or a subfolder within the current working directory,
-e.g., \code{"/imgs"}.}
+processed images. Defaults to \code{NULL}. In this case, the function will search
+for the image \code{img} in the current working directory. After processing, when
+\code{save_image = TRUE}, the processed image will be also saved in such a
+directory. It can be either a full path, e.g., \code{"C:/Desktop/imgs"}, or a
+subfolder within the current working directory, e.g., \code{"/imgs"}.}
 
 \item{verbose}{If \code{TRUE} (default) a summary is shown in the console.}
 
@@ -227,11 +365,13 @@ e.g., \code{"/imgs"}.}
 \item{type}{The type of plot. Either \code{"hist"} or \code{"density"}. Partial matches
 are recognized.}
 
-\item{facet}{Create a facet plot for each object when \code{which = "index"} is
-used?. Defaults to \code{FALSE}.}
+\item{...}{Depends on the function:
+\itemize{
+\item For \code{\link[=analyze_objects_iter]{analyze_objects_iter()}}, further arguments passed on to
+\code{\link[=analyze_objects]{analyze_objects()}}.
+}}
 
-\item{...}{Further argument passed on to \code{\link[lattice:histogram]{lattice::histogram()}} or
-\code{\link[lattice:histogram]{lattice::densityplot()}}}
+\item{known_area}{The known area of the template object.}
 }
 \value{
 \code{analyze_objects()} returns a list with the following objects:
@@ -247,66 +387,199 @@ image:
 \item \code{radius_min}, \code{radius_mean}, and \code{radius_max}: The minimum, mean, and
 maximum radius (in pixels), respectively.
 \item \code{radius_sd}: standard deviation of the mean radius (in pixels).
-\item \code{radius_ratio}: radius ratio given by \code{radius_max / radius_min}.
 \item \code{diam_min}, \code{diam_mean}, and \code{diam_max}: The minimum, mean, and
 maximum diameter (in pixels), respectively.
 \item \code{major_axis}, \code{minor_axis}: elliptical fit for major and minor axes (in
 pixels).
-\item \code{eccentricity}: elliptical eccentricity defined by
-sqrt(1-minoraxis^2/majoraxis^2). Circle eccentricity is 0 and straight
-line eccentricity is 1.
+\item \code{caliper}: The longest distance between any two points on the margin
+of the object. See \code{\link[=poly_caliper]{poly_caliper()}} for more details
+\item \code{length}, \code{width} The length and width of objects (in pixels). These
+measures are obtained as the range of x and y coordinates after aligning
+each object with \code{\link[=poly_align]{poly_align()}}.
+\item \code{radius_ratio}: radius ratio given by \code{radius_max / radius_min}.
 \item \code{theta}: object angle (in radians).
+\item \code{eccentricity}: elliptical eccentricity computed using the
+ratio of the eigen values (inertia axes of coordinates).
+\item \code{form_factor} (Wu et al., 2007):  the difference between a leaf and a
+circle. It is defined as \code{4*pi*A/P}, where A is the area and P is the
+perimeter of the object.
+\item \code{narrow_factor} (Wu et al., 2007): Narrow factor (\code{caliper / length}).
+\item \code{asp_ratio} (Wu et al., 2007): Aspect ratio (\code{length / width}).
+\item \code{rectangularity} (Wu et al., 2007): The similarity between a leaf and
+a rectangle (\code{length * width/ area}).
+\item \code{pd_ratio} (Wu et al., 2007): Ratio of perimeter to diameter
+(\code{perimeter / caliper})
+\item \code{plw_ratio} (Wu et al., 2007): Perimeter ratio of length and width
+(\code{perimeter / (length + width)})
 \item \code{solidity}: object solidity given by \code{area / area_ch}.
-\item \code{circularity}: the object circularity given by \eqn{4*pi *(area /
-    perimeter^2)}.
+\item \code{convexity}: The convexity of the object computed using the ratio
+between the perimeter of the convex hull and the perimeter of the polygon.
+\item \code{elongation}: The elongation of the object computed as \code{1 - width / length}.
+\item \code{circularity}: The object circularity given by \code{perimeter ^ 2 / area}.
+\item \code{circularity_haralick}: The Haralick's circularity (CH), computed as
+\code{CH =  m/sd}, where \code{m} and \code{sd} are the mean and standard deviations
+from each pixels of the perimeter to the centroid of the object.
+\item \code{circularity_norm}: The normalized circularity (Cn), to be unity for a
+circle. This measure is computed as \code{Cn = perimeter ^ 2 / 4*pi*area} and
+is invariant under translation, rotation, scaling transformations, and
+dimensionless.
+\item \code{asm}: The angular second-moment feature.
+\item \code{con}: The contrast feature
+\item \code{cor}: Correlation measures the linear dependency of gray levels of
+neighboring pixels.
+\item \code{var}: The variance of gray levels pixels.
+\item \code{idm}: The Inverse Difference Moment (IDM), i.e., the local
+homogeneity.
+\item \code{sav}: The Sum Average.
+\item \code{sva}: The Sum Variance.
+\item \code{sen}: Sum Entropy.
+\item \code{dva}: Difference Variance.
+\item \code{den}: Difference Entropy
+\item \code{f12}: Difference Variance.
+\item \code{f13}: The angular second-moment feature.
 }
 \item \code{statistics}: A data frame with the summary statistics for the area of the
 objects.
 \item \code{count}: If \code{pattern} is used, shows the number of objects in each image.
-\item \code{object_rgb}: If \code{object_index} is used, returns the R, G, and B values
+\item \code{obj_rgb}: If \code{object_index} is used, returns the R, G, and B values
 for each pixel of each object.
 \item \code{object_index}: If \code{object_index} is used, returns the index computed for
 each object.
+\item Elliptical Fourier Analysis: If \code{efourier = TRUE} is used, the following
+objects are returned.
+\itemize{
+\item \code{efourier}: The Fourier coefficients.  For more details see
+\code{\link[=efourier]{efourier()}}.
+\item \code{efourier_norm}: The normalized Fourier coefficients. For more details
+see \code{\link[=efourier_norm]{efourier_norm()}}.
+\item \code{efourier_error}: The error between original data and  reconstructed
+outline. For more details see \code{\link[=efourier_error]{efourier_error()}}.
+\item \code{efourier_power}: The spectrum of harmonic Fourier power.
+For more details see \code{\link[=efourier_power]{efourier_power()}}.
 }
-
-\code{plot.anal_obj()} returns a \code{trellis} object containing the
-distribution of the pixels, optionally  for each object when \code{facet = TRUE}
-is used.
+\item \code{veins}: If \code{veins = TRUE} is used, returns, for each image, the
+proportion of veins (in fact the object edges) related to the total object(s)' area.
+\item \code{analyze_objects_iter()} returns a data.frame containing the features
+described in the \code{results} object of \code{\link[=analyze_objects]{analyze_objects()}}.
+\item \code{plot.anal_obj()} returns a \code{trellis} object containing the distribution
+of the pixels, optionally  for each object when \code{facet = TRUE} is used.
+}
 }
 \description{
 \itemize{
 \item \code{\link[=analyze_objects]{analyze_objects()}} provides tools for counting and extracting object
 features (e.g., area, perimeter, radius, pixel intensity) in an image. See
-more at \strong{Details} section.
-\item \code{\link[=plot.anal_obj]{plot.anal_obj()}} Produces an histogram for the R, G, and B values when
+more at the \strong{Details} section.
+\item \code{\link[=analyze_objects_iter]{analyze_objects_iter()}} provides an iterative section to measure object
+features using an object with a known area.
+\item \code{\link[=plot.anal_obj]{plot.anal_obj()}} produces a histogram for the R, G, and B values when
 argument \code{object_index} is used in the function \code{\link[=analyze_objects]{analyze_objects()}}.
 }
 }
 \details{
-A binary image is first generated to segment the foreground and background.
-The argument \code{index} is useful to choose a proper index to segment the image
-(see \code{\link[=image_binary]{image_binary()}} for more details). Then, the number of objects in the
-foreground is counted. By setting up arguments such as \code{lower_size},
-\code{upper_size} it is possible to set a threshold for lower and upper sizes of
-the objects, respectively. The argument \code{object_size} can be used to set up
-pre-defined values of \code{tolerance} and \code{extension} depending on the image
-resolution. This will influence the watershed-based object segmentation. Users
-can also tune-up \code{tolerance} and \code{extension} explicitly to a better precision
-of watershed segmentation.
+A binary image is first generated to segment the foreground and
+background. The argument \code{index} is useful to choose a proper index to
+segment the image (see \code{\link[=image_binary]{image_binary()}} for more details). It is also
+possible to provide color palettes for background and foreground (arguments
+\code{background} and \code{foreground}, respectively). When this is used, a general
+linear model (binomial family) fitted to the RGB values to segment fore- and
+background.
+
+Then, the number of objects in the  foreground is counted. By setting up
+arguments such as \code{lower_size} and \code{upper_size}, it is possible to set a
+threshold for lower and upper sizes of the objects, respectively. The
+argument \code{object_size} can be used to set up pre-defined values of
+\code{tolerance} and \code{extension} depending on the image resolution. This will
+influence the watershed-based object segmentation. Users can also tune up
+\code{tolerance} and \code{extension} explicitly for a better precision of watershed
+segmentation.
 
 If \code{watershed = FALSE} is used, all pixels for each connected set of
-foreground pixels in \code{img} are set to a unique object. This is faster
-(specially for a large number of objects) but is not able to segment touching
-objects.
+foreground pixels in \code{img} are set to a unique object. This is faster,
+especially for a large number of objects, but it is not able to segment
+touching objects.
 
-If color palettes samples are provided, a general
-linear model (binomial family) fitted to the RGB values is used to segment
-fore- and background.
+There are some ways to correct the measures based on a reference object. If
+a reference object with a known area (\code{reference_area}) is used in the image
+and \code{reference = TRUE} is used, the measures of the objects will be
+corrected, considering the unit of measure informed in \code{reference_area}.
+There are two main ways to work with reference objects.
+\itemize{
+\item The first, is to provide a reference object that has a contrasting color with
+both the background and object of interest. In this case, the arguments
+\code{back_fore_index} and \code{fore_ref_index} can be used to define an index to
+first segment the reference object and objects to be measured from the
+background, then the reference object from objects to be measured.
+\item The second one is to use a reference object that has a similar color to the
+objects to be measured, but has a contrasting size. For example, if we are
+counting small brown grains, we can use a brown reference template that has
+an area larger (says 3 times the area of the grains) and then uses
+\code{reference_larger = TRUE}. With this, the larger object in the image will be
+used as the reference object. This is particularly useful when images are
+captured with background light, such as the example  2. Some types: (i) It
+is suggested that the reference object is not too much larger than the
+objects of interest (mainly when the \code{watershed = TRUE}). In some cases, the
+reference object can be broken into several pieces due to the watershed
+algorithm. (ii) Since the reference object will increase the mean area of
+the object, the argument \code{lower_noise} can be increased. By default
+(\code{lower_noise = 0.1}) objects with lesser than 10\% of the mean area of all
+objects are removed. Since the mean area will be increased, increasing
+\code{lower_noise} will remove dust and noises more reliably. The argument
+\code{reference_smaller} can be used in the same way
+}
 
-By using \code{pattern} it is possible to process several images with common
+By using \code{pattern}, it is possible to process several images with common
 pattern names that are stored in the current working directory or in the
-subdirectory informed in \code{dir_original}'. To speed up the computation time,
+subdirectory informed in \code{dir_original}. To speed up the computation time,
 one can set \code{parallel = TRUE}.
+
+\code{\link[=analyze_objects_iter]{analyze_objects_iter()}} can be used to process several images using an
+object with a known area as a template. In this case, all the images in the
+current working directory that match the \code{pattern} will be processed. For
+each image, the function will compute the features for the objects and show
+the identification (id) of each object. The user only needs to inform which
+is the id of the known object. Then, given the \code{known_area}, all the
+measures will be adjusted. In the end, a data.frame with the adjusted
+measures will be returned. This is useful when the images are taken at
+different heights. In such cases, the image resolution cannot be conserved.
+Consequently, the measures cannot be adjusted using the argument \code{dpi} from
+\code{\link[=get_measures]{get_measures()}}, since each image will have a different resolution. NOTE:
+This will only work in an interactive section.
+\itemize{
+\item Additional measures: By default, some measures are not computed, mainly due to
+computational efficiency when the user only needs simple measures such as
+area, length, and width.
+\itemize{
+\item If \code{haralick = TRUE}, The function computes 13 Haralick texture features for
+each object based on a gray-level co-occurrence matrix (Haralick et al.
+1979). Haralick features depend on the configuration of the parameters
+\code{har_nbins} and \code{har_scales}. \code{har_nbins} controls the number of bins used
+to compute the Haralick matrix. A smaller \code{har_nbins} can give more accurate
+estimates of the correlation because the number of events per bin is higher.
+While a higher value will give more sensitivity. \code{har_scales} controls the
+number of scales used to compute the Haralick features. Since Haralick
+features compute the correlation of intensities of neighboring pixels it is
+possible to identify textures with different scales, e.g., a texture that is
+repeated every two pixels or 10 pixels. By default, the Haralick features
+are computed with the R band. To chance this default, use the argument
+\code{har_band}. For example, \code{har_band = 2} will compute the features with the
+green band.
+\item If \code{efourier = TRUE} is used, an Elliptical Fourier Analysis (Kuhl and
+Giardina, 1982) is computed for each object contour using \code{\link[=efourier]{efourier()}}.
+\item If \code{veins = TRUE} (experimental), vein features are computed. This will call
+\code{\link[=object_edge]{object_edge()}} and applies the Sobel-Feldman Operator to detect edges. The
+result is the proportion of edges in relation to the entire area of the
+object(s) in the image. Note that THIS WILL BE AN OPERATION ON AN IMAGE
+LEVEL, NOT an OBJECT LEVEL! So, If vein features need to be computed for
+leaves, it is strongly suggested to use one leaf per image.
+\item If \code{ab_angles = TRUE} the apex and base angles of each object are
+computed with \code{\link[=poly_apex_base_angle]{poly_apex_base_angle()}}. By default, the function computes
+the angle from the first pixel of the apex of the object to the two pixels
+that slice the object at the 25th percentile of the object height (apex
+angle). The base angle is computed in the same way but from the first base
+pixel.
+}
+}
 }
 \examples{
 \donttest{
@@ -315,14 +588,30 @@ img <- image_pliman("soybean_touch.jpg")
 obj <- analyze_objects(img)
 obj$statistics
 
+########################### Example 1 #########################
 # Enumerate the objects in the original image
 # Return the top-5 grains with the largest area
-
 top <-
  analyze_objects(img,
                  marker = "id",
                  topn_upper = 5)
 top$results
+
+
+#' ########################### Example 1 #########################
+# Correct the measures based on the area of the largest object
+# note that since the reference object
+
+img <- image_pliman("flax_grains.jpg")
+res <-
+  analyze_objects(img,
+                  index = "GRAY",
+                  marker = "point",
+                  show_contour = FALSE,
+                  reference = TRUE,
+                  reference_area = 6,
+                  reference_larger = TRUE,
+                  lower_noise = 0.3)
 }
 
 \donttest{
@@ -335,7 +624,8 @@ img <- image_pliman("soy_green.jpg")
 rgb <-
    analyze_objects(img,
                    marker = "id",
-                   object_index = "B")
+                   object_index = "B",
+                   pixel_level_index = TRUE)
 # density of area
 plot(rgb)
 
@@ -347,14 +637,38 @@ plot(rgb, which = "index")
 }
 }
 \references{
+Claude, J. (2008) \emph{Morphometrics with R}, Use R! series,
+Springer 316 pp.
+
 Gupta, S., Rosenthal, D. M., Stinchcombe, J. R., & Baucom, R. S. (2020). The
 remarkable morphological diversity of leaf shape in sweet potato (Ipomoea
 batatas): the influence of genetics, environment, and G×E. New Phytologist,
 225(5), 2183–2195. \doi{10.1111/NPH.16286}
 
+Haralick, R.M., K. Shanmugam, and I. Dinstein. 1973. Textural Features for Image
+Classification. IEEE Transactions on Systems, Man, and Cybernetics SMC-3(6): 610–621.
+\doi{10.1109/TSMC.1973.4309314}
+
+Kuhl, F. P., and Giardina, C. R. (1982). Elliptic Fourier features of a
+closed contour. Computer Graphics and Image Processing 18, 236–258. doi:
+\doi{10.1016/0146-664X(82)90034-X}
+
 Lee, Y., & Lim, W. (2017). Shoelace Formula: Connecting the Area of a Polygon
 and the Vector Cross Product. The Mathematics Teacher, 110(8), 631–636.
 \doi{10.5951/mathteacher.110.8.0631}
+
+Montero, R. S., Bribiesca, E., Santiago, R., & Bribiesca, E. (2009). State
+of the Art of Compactness and Circularity Measures. International
+Mathematical Forum, 4(27), 1305–1335.
+
+Chen, C.H., and P.S.P. Wang. 2005. Handbook of Pattern Recognition and
+Computer Vision. 3rd ed. World Scientific.
+
+Wu, S. G., Bao, F. S., Xu, E. Y., Wang, Y.-X., Chang, Y.-F., and Xiang, Q.-L.
+(2007). A Leaf Recognition Algorithm for Plant Classification Using
+Probabilistic Neural Network. in 2007 IEEE International Symposium on Signal
+Processing and Information Technology, 11–16.
+\doi{10.1109/ISSPIT.2007.4458016}
 }
 \author{
 Tiago Olivoto \email{tiagoolivoto@gmail.com}

@@ -8,21 +8,23 @@
 \title{Import and export images}
 \usage{
 image_import(
-  image,
+  img,
   ...,
+  which = 1,
   pattern = NULL,
   path = NULL,
+  resize = FALSE,
   plot = FALSE,
   nrow = NULL,
   ncol = NULL
 )
 
-image_export(image, name, prefix = "", extension = NULL, subfolder = NULL, ...)
+image_export(img, name, prefix = "", extension = NULL, subfolder = NULL, ...)
 
-image_pliman(image, plot = FALSE)
+image_pliman(img, plot = FALSE)
 }
 \arguments{
-\item{image}{\itemize{
+\item{img}{\itemize{
 \item For \code{image_import()}, a character vector of file names or URLs.
 \item For \code{image_export()}, an Image object, an array or a list of images.
 \item For \code{image_pliman()}, a charactere value specifying the image example. See
@@ -31,6 +33,10 @@ image_pliman(image, plot = FALSE)
 
 \item{...}{Alternative arguments passed to the corresponding functions from
 the \code{jpeg}, \code{png}, and \code{tiff} packages.}
+
+\item{which}{logical scalar or integer vector to indicate which image are
+imported if a TIFF files is informed. Defaults to \code{1} (the first image is
+returned).}
 
 \item{pattern}{A pattern of file name used to identify images to be imported.
 For example, if \code{pattern = "im"} all images in the current working
@@ -42,6 +48,10 @@ will be returned if the pattern matches any file that is not supported
 \item{path}{A character vector of full path names; the default corresponds to
 the working directory, \code{\link[=getwd]{getwd()}}. It will overwrite (if given) the path
 informed in \code{image} argument.}
+
+\item{resize}{Resize the image after importation? Defaults to \code{FALSE}. Use a
+numeric value of range 0-100 (proportion of the size of the original
+image).}
 
 \item{plot}{Plots the image after importing? Defaults to \code{FALSE}.}
 
@@ -83,8 +93,8 @@ folder <- image_pliman()
 full_path <- paste0(folder, "/sev_leaf.jpg")
 (path <- file_dir(full_path))
 (file <- basename(full_path))
-image_import(image = full_path)
-image_import(image = file, path = path)
+image_import(img = full_path)
+image_import(img = file, path = path)
 }
 \author{
 Tiago Olivoto \email{tiagoolivoto@gmail.com}

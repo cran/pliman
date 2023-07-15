@@ -6,37 +6,35 @@
 \title{Image indexes}
 \usage{
 image_index(
-  image,
+  img,
   index = NULL,
-  my_index = NULL,
   resize = FALSE,
   re = NULL,
   nir = NULL,
-  show_image = TRUE,
+  has_white_bg = FALSE,
+  plot = TRUE,
   nrow = NULL,
   ncol = NULL,
   parallel = FALSE,
   workers = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
 
-\method{plot}{image_index}(x, type = "raster", nrow = NULL, ncol = NULL, ...)
+\method{plot}{image_index}(x, type = c("raster", "density"), nrow = NULL, ncol = NULL, ...)
 }
 \arguments{
-\item{image}{An image object.}
+\item{img}{An image object.}
 
 \item{index}{A character value (or a vector of characters) specifying the
 target mode for conversion to binary image. Use \code{\link[=pliman_indexes]{pliman_indexes()}} or the
 \code{details} section to see the available indexes.  Defaults to \code{NULL}
 ((normalized) Red, Green and Blue).  One can also use "RGB" for RGB only,
-"NRGB" for normalized RGB, or "all" for all indexes.}
+"NRGB" for normalized RGB, or "all" for all indexes. User can also
+calculate your own index using the bands names, e.g. \code{index = "R+B/G"}.}
 
-\item{my_index}{User can calculate a different index using the bands names,
-e.g. \code{my_index = "R+B/G"}.}
-
-\item{resize}{Resize the image before processing? Defaults to \code{30}, which
-resizes the image to 30\% of the original size to speed up image processing.
-Set \code{resize = FALSE} to keep the original size of the image.}
+\item{resize}{Resize the image before processing? Defaults to \code{resize = FALSE}. Use \code{resize = 50}, which resizes the image to 50\% of the original
+size to speed up image processing.}
 
 \item{re}{Respective position of the red-edge band at the original image
 file.}
@@ -44,7 +42,13 @@ file.}
 \item{nir}{Respective position of the near-infrared band at the original
 image file.}
 
-\item{show_image}{Show image after processing?}
+\item{has_white_bg}{Logical indicating whether a white background is present.
+If TRUE, pixels that have R, G, and B values equals to 1 will be considered
+as NA. This may be useful to compute an image index for objects that have,
+for example, a white background. In such cases, the background will not be
+considered for the threshold computation.}
+
+\item{plot}{Show image after processing?}
 
 \item{nrow, ncol}{The number of rows or columns in the plot grid. Defaults to
 \code{NULL}, i.e., a square grid is produced.}
@@ -59,30 +63,31 @@ number of parallel processes that can be active at the same time.}
 
 \item{verbose}{If \code{TRUE} (default) a summary is shown in the console.}
 
+\item{...}{Additional arguments passed to \code{\link[=plot_index]{plot_index()}} for customization.}
+
 \item{x}{An object of class \code{image_index}.}
 
 \item{type}{The type of plot. Use \code{type = "raster"} (default) to produce a
 raster plot showing the intensity of the pixels for each image index or
 \code{type = "density"} to produce a density plot with the pixels' intensity.}
-
-\item{...}{Currently not used}
 }
 \value{
 A list containing Grayscale images. The length will depend on the
 number of indexes used.
 
-A \code{trellis} object containing the distribution of the pixels for each
-index.
+A \code{NULL} object
 }
 \description{
 \code{image_index()} Builds image indexes using Red, Green, Blue, Red-Edge, and NIR bands.
 
-\code{plot.image_index()} produces a raster (\code{type = "raster"}, default) or a
-density (\code{type = "density"}) plot of the index values computed with
+Generates a raster or density plot of the index values computed with
 \code{image_index()}.
 }
 \details{
 The following indexes are available in pliman.
+\itemize{
+\item RGB color space
+}
 \itemize{
 \item \code{R} red
 \item \code{G} green
@@ -102,30 +107,50 @@ The following indexes are available in pliman.
 \item \code{NDGBI} Normalized green blue difference index \code{(G-B)/(G+B)}
 \item \code{NDRBI} Normalized red blue difference index \code{(R-B)/(R+B)}
 \item \code{I}     R+G+B
-\item \code{S}     ((R+G+B)-3*B)/(R+G+B)
+\item \code{S}     \code{((R+G+B)-3*B)/(R+G+B)}
 \item \code{L}     R+G+B/3
 \item \code{VARI} A Visible Atmospherically Resistant Index \code{(G-R)/(G+R-B)}
 \item \code{HUE} Overall Hue Index \code{atan(2*(B-G-R)/30.5*(G-R))}
 \item \code{HUE2}  atan(2*(R-G-R)/30.5*(G-B))
 \item \code{BGI}   B/G
 \item \code{GRAY}	\code{0.299*R + 0.587*G + 0.114*B}
+\item \code{GRAY2} \code{((R^2.2+(1.5*G)^2.2+(0.6*B)^2.2)/(1+1.5^2.2+0.6^2.2))^1/2.2}
 \item \code{GLAI} \code{(25*(G-R)/(G+R-B)+1.25)}
 \item \code{CI} Coloration Index \code{(R-B)/R}
 \item \code{SAT} Overhall Saturation Index \code{(max(R,G,B) - min(R,G,B)) / max(R,G,B)}
 \item \code{SHP} Shape Index \code{2*(R-G-B)/(G-B)}
 \item \code{RI} Redness Index \code{R**2/(B*G**3)}
 }
+\itemize{
+\item HSB color space
+\item \code{DGCI} Dark Green Color Index, based on HSB color space \verb{60\\*((G - B) / (max(R, G, B) - min(R, G, B)))}
+\item CIE-Lab color space
+}
+\itemize{
+\item \verb{L*}: relative luminance \code{(0.2126 * R + 0.7152 * G + 0.0722 * B)}
+\item \verb{a*}: \code{0.55*( (R - (0.2126 * R + 0.7152 * G + 0.0722 * B)) / (1.0 - 0.2126))}
+}
+
+When \code{type = "raster"} (default), the function calls \code{\link[=plot_index]{plot_index()}}
+to create a raster plot for each index present in \code{x}. If \code{type = "density"},
+a for loop is used to create a density plot for each index. Both types of
+plots can be arranged in a grid controlled by the \code{ncol} and \code{nrow}
+arguments.
 }
 \examples{
 library(pliman)
 img <- image_pliman("soybean_touch.jpg")
 image_index(img, index = c("R, NR"))
+
+# Example for S3 method plot()
 library(pliman)
 img <- image_pliman("sev_leaf.jpg")
-
-# resize the image to 30\% of the original size
-ind <- image_index(img, resize = 30, show_image = FALSE)
+# compute the index
+ind <- image_index(img, index = c("R, G, B, NGRDI"), plot = FALSE)
 plot(ind)
+
+# density plot
+plot(ind, type = "density")
 }
 \references{
 Nobuyuki Otsu, "A threshold selection method from gray-level
@@ -133,7 +158,5 @@ histograms". IEEE Trans. Sys., Man., Cyber. 9 (1): 62-66. 1979.
 \doi{10.1109/TSMC.1979.4310076}
 }
 \author{
-Tiago Olivoto \email{tiagoolivoto@gmail.com}
-
 Tiago Olivoto \email{tiagoolivoto@gmail.com}
 }

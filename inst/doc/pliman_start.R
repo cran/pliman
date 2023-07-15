@@ -12,14 +12,19 @@ area <-
   get_measures(count,
                id = 6,
                area ~ 4)
-area
+str(area)
 # plot the area to the segmented image
 image_segment(leaves, index = "NB", verbose = FALSE)
+plot(leaves)
 plot_measures(area, measure = "area")
 
 
 ## -----------------------------------------------------------------------------
-get_measures(count, dpi = 84)
+area_dpi <- get_measures(count, dpi = 83.5)
+plot(leaves)
+plot_measures(area_dpi,
+              measure = "area",
+              vjust = -25)
 
 ## -----------------------------------------------------------------------------
 soy <- image_pliman("soybean_touch.jpg")
@@ -33,17 +38,16 @@ plot_measures(grains)
 
 ## -----------------------------------------------------------------------------
 img <- image_pliman("sev_leaf.jpg")
-healthy <- image_pliman("sev_healthy.jpg")
-symptoms <- image_pliman("sev_sympt.jpg")
-background <- image_pliman("sev_back.jpg")
-image_combine(img, healthy, symptoms,background)
-
 # Computes the symptomatic area
 measure_disease(img = img,
-                img_healthy = healthy,
-                img_symptoms = symptoms,
-                img_background = background,
-                show_image = TRUE)
+                index_lb = "B", # to remove the background
+                index_dh = "NGRDI", # to isolate the diseased area
+                threshold = c("Otsu", 0), # You can also use the Otsu algorithm in both indexes (default)
+                plot = TRUE)
+
+## ----eval=FALSE---------------------------------------------------------------
+#  img <- image_pliman("sev_leaf.jpg", plot = TRUE)
+#  measure_disease_iter(img, viewer = "mapview")
 
 ## -----------------------------------------------------------------------------
 img <- image_pliman("soy_green.jpg")
@@ -53,9 +57,7 @@ img <- image_pliman("soy_green.jpg")
 rgb <- 
   analyze_objects(img,
                   object_index = "B",
-                  marker = "index")
-
-
-# plot the distribution of RGB values of each object
-plot(rgb)
+                  pixel_level_index = TRUE)
+# Plots the B index for each grain
+plot_measures(rgb, measure = "B")
 

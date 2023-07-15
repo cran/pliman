@@ -134,8 +134,8 @@ manipulate_files <- function(pattern,
   if(pattern %in% c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")){
     pattern <- "^[0-9].*$"
   }
-  old_files <- list.files(dir, pattern = "00")
-  old_files <- paste0(ifelse(nchar(dir) !=2,
+  old_files <- list.files(dir, pattern = pattern)
+  old_files <- paste0(ifelse(nchar(dir) != 2,
                              paste0(dir, "/"),
                              paste(dir)), old_files)
   names <- sapply(old_files, file_name)
@@ -151,11 +151,11 @@ manipulate_files <- function(pattern,
       name <-
         unlist(lapply(seq_along(names),
                       function(i){
-                        paste0(name, i, collapse = "_")
+                        paste0(name,  collapse = "_")
                       }))
     } else{
       name <- name
-      if(length(name) != length(names)){
+      if (length(name) != length(names)) {
         stop("The length of name must be equal to the number of files (", length(names), ").")
       }
     }
@@ -163,17 +163,27 @@ manipulate_files <- function(pattern,
   suffix <- ifelse(is.null(suffix), "", suffix)
   new_files <- paste0(save_to, prefix, sep, name, sep, suffix, ".", extens)
   a <- file.copy(from = old_files, to = new_files, overwrite = overwrite)
-  if(remove_original == TRUE){
-    invisible(file.remove(old_files))
-  }
-  if(verbose == TRUE){
-    if(remove_original == TRUE){
-      message(length(old_files), " files successfully deleted from '", dir, "'")
+  if (remove_original == TRUE) {
+    answer <- readline("Are you sure you want to delete the files? (y/n)")
+    while (!answer %in% c("y", "n")) {
+      answer <- readline("Are you sure you want to delete the files? (y/n)")
     }
-    if(all(a) == TRUE){
+    if (answer == "y") {
+      invisible(file.remove(old_files))
+      if (verbose == TRUE) {
+        if (remove_original == TRUE) {
+          message(length(old_files), " files successfully deleted from '", dir, "'")
+        }
+      }
+    } else{
+      message("Nothing done.")
+    }
+  }
+  if (verbose == TRUE) {
+    if (all(a) == TRUE) {
       message(length(a), " files successfully copied to '", save_to, "'")
     }
-    if(any(a) == FALSE){
+    if (any(a) == FALSE) {
       warning("Failed to copy ", length(which(a == FALSE)), " files.", call. = FALSE)
     }
   }
@@ -182,16 +192,44 @@ manipulate_files <- function(pattern,
 #' @name utils_file
 #' @export
 pliman_indexes <- function(){
-  read.csv(file=system.file("indexes.csv",
-                            package = "pliman",
-                            mustWork = TRUE),
+  read.csv(file = system.file("indexes.csv",
+                              package = "pliman",
+                              mustWork = TRUE),
            header = T, sep = ";")$Index
 }
 #' @name utils_file
 #' @export
 pliman_indexes_eq <- function(){
-  read.csv(file=system.file("indexes.csv",
-                            package = "pliman",
-                            mustWork = TRUE),
+  read.csv(file = system.file("indexes.csv",
+                              package = "pliman",
+                              mustWork = TRUE),
            header = T, sep = ";")$Equation
 }
+
+
+#' Add leading zeros to a numeric sequence
+#'
+#' Add `n` leading zeros to a numeric sequence. This is useful to create a
+#' character vector to rename files in a folder.
+#'
+#' @param x A numeric vector or a list of numeric vectors.
+#' @param n The number of leading zeros to add. Defaults to `3`.
+#'
+#' @return A character vector or a list of character vectors.
+#' @export
+#'
+#' @examples
+#' library(pliman)
+#' leading_zeros(1:5)
+#' leading_zeros(list(a = 1:3,
+#'                    b = 1:5),
+#'               n = 2)
+leading_zeros <- function(x, n = 3){
+  if (is.list(x)) {
+    lapply(x, leading_zeros, n)
+  } else{
+    expr <-   paste0("%0.", n, "d")
+    sprintf(expr, x)
+  }
+}
+

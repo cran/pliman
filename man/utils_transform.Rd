@@ -17,15 +17,17 @@
 \alias{image_opening}
 \alias{image_closing}
 \alias{image_skeleton}
+\alias{image_thinning}
 \alias{image_filter}
 \alias{image_blur}
 \alias{image_contrast}
 \title{Spatial transformations}
 \usage{
 image_autocrop(
-  image,
+  img,
   index = "NB",
   edge = 5,
+  filter = 3,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -33,19 +35,21 @@ image_autocrop(
 )
 
 image_crop(
-  image,
+  img,
   width = NULL,
   height = NULL,
+  viewer = get_pliman_viewer(),
+  show = "rgb",
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
   plot = FALSE
 )
 
-image_dimension(image, parallel = FALSE, workers = NULL, verbose = TRUE)
+image_dimension(img, parallel = FALSE, workers = NULL, verbose = TRUE)
 
 image_rotate(
-  image,
+  img,
   angle,
   bg_col = "white",
   parallel = FALSE,
@@ -55,7 +59,7 @@ image_rotate(
 )
 
 image_horizontal(
-  image,
+  img,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -63,7 +67,7 @@ image_horizontal(
 )
 
 image_vertical(
-  image,
+  img,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -71,7 +75,7 @@ image_vertical(
 )
 
 image_hreflect(
-  image,
+  img,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -79,7 +83,7 @@ image_hreflect(
 )
 
 image_vreflect(
-  image,
+  img,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -87,7 +91,7 @@ image_vreflect(
 )
 
 image_resize(
-  image,
+  img,
   rel_size = 100,
   width,
   height,
@@ -98,7 +102,7 @@ image_resize(
 )
 
 image_trim(
-  image,
+  img,
   edge = NULL,
   top = NULL,
   bottom = NULL,
@@ -111,7 +115,7 @@ image_trim(
 )
 
 image_dilate(
-  image,
+  img,
   kern = NULL,
   size = NULL,
   shape = "disc",
@@ -122,7 +126,7 @@ image_dilate(
 )
 
 image_erode(
-  image,
+  img,
   kern = NULL,
   size = NULL,
   shape = "disc",
@@ -133,7 +137,7 @@ image_erode(
 )
 
 image_opening(
-  image,
+  img,
   kern = NULL,
   size = NULL,
   shape = "disc",
@@ -144,7 +148,7 @@ image_opening(
 )
 
 image_closing(
-  image,
+  img,
   kern = NULL,
   size = NULL,
   shape = "disc",
@@ -155,7 +159,7 @@ image_closing(
 )
 
 image_skeleton(
-  image,
+  img,
   kern = NULL,
   parallel = FALSE,
   workers = NULL,
@@ -164,8 +168,18 @@ image_skeleton(
   ...
 )
 
+image_thinning(
+  img,
+  niter = 3,
+  parallel = FALSE,
+  workers = NULL,
+  verbose = TRUE,
+  plot = FALSE,
+  ...
+)
+
 image_filter(
-  image,
+  img,
   size = 2,
   cache = 512,
   parallel = FALSE,
@@ -175,7 +189,7 @@ image_filter(
 )
 
 image_blur(
-  image,
+  img,
   sigma = 3,
   parallel = FALSE,
   workers = NULL,
@@ -184,7 +198,7 @@ image_blur(
 )
 
 image_contrast(
-  image,
+  img,
   parallel = FALSE,
   workers = NULL,
   verbose = TRUE,
@@ -192,7 +206,7 @@ image_contrast(
 )
 }
 \arguments{
-\item{image}{An image or a list of images of class \code{Image}.}
+\item{img}{An image or a list of images of class \code{Image}.}
 
 \item{index}{The index to segment the image. See \code{\link[=image_index]{image_index()}} for more
 details. Defaults to \code{"NB"} (normalized blue).}
@@ -204,6 +218,10 @@ image. If \code{edge = 0} the image will be cropped to create a bounding rectang
 \item for \code{\link[=image_trim]{image_trim()}}, the number of pixels removed from the edges. By
 default, 20 pixels are removed from all the edges.
 }}
+
+\item{filter}{Performs median filtering in the binary image. This is useful
+to remove noise (like dust) and improve the image autocropping method. See
+more at \code{\link[=image_filter]{image_filter()}}. Set to \code{FALSE} to remove the median filtering.}
 
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
@@ -225,6 +243,18 @@ relative size informed in \code{rel_size}.
 respectively) that will be maintained in the cropped image, e.g., width =
 100:200
 }}
+
+\item{viewer}{The viewer option. If not provided, the value is retrieved
+using \code{\link[=get_pliman_viewer]{get_pliman_viewer()}}. This option controls the type of viewer to use
+for interactive plotting. The available options are "base" and "mapview".
+If set to "base", the base R graphics system is used for interactive
+plotting. If set to "mapview", the mapview package is used. To set this
+argument globally for all functions in the package, you can use the
+\code{\link[=set_pliman_viewer]{set_pliman_viewer()}} function. For example, you can run
+\code{set_pliman_viewer("mapview")} to set the viewer option to "mapview" for
+all functions.}
+
+\item{show}{How to plot in mapview viewer, either \code{"rgb"} or \code{"index"}.}
 
 \item{angle}{The rotation angle in degrees.}
 
@@ -252,6 +282,10 @@ resolution (megapixels) times 20.
 \code{box}, \code{disc}, \code{diamond}, \code{Gaussian} or \code{line}. Default is \code{disc}.}
 
 \item{...}{Additional arguments passed on to \code{\link[=image_binary]{image_binary()}}.}
+
+\item{niter}{The number of iterations to perform in the thinning procedure.
+Defaults to 3. Set to \code{NULL} to iterate until the binary image is no longer
+changing.}
 
 \item{cache}{The the L2 cache size of the system CPU in kB (integer).
 Defaults to \code{512}.}
