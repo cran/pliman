@@ -1,6 +1,6 @@
 Package: pliman
 Title: Tools for Plant Image Analysis
-Version: 2.0.0
+Version: 2.0.1
 Authors@R: 
     person("Tiago", "Olivoto", , "tiagoolivoto@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0241-9636"))
@@ -22,15 +22,14 @@ Suggests: BiocManager, EBImage, knitr, leafem (>= 0.2.0), leaflet (>=
         2.1.2), mapedit (>= 0.6.0), mapview (>= 2.11.0), rmarkdown,
         rstudioapi
 LinkingTo: Rcpp, RcppArmadillo
-VignetteBuilder: knitr
 biocViews:
 Encoding: UTF-8
 Language: en-US
 LazyData: true
 RoxygenNote: 7.2.3
 NeedsCompilation: yes
-Packaged: 2023-07-15 00:10:39 UTC; tiago
+Packaged: 2023-09-11 20:23:43 UTC; tiago
 Author: Tiago Olivoto [aut, cre] (<https://orcid.org/0000-0002-0241-9636>)
 Maintainer: Tiago Olivoto <tiagoolivoto@gmail.com>
 Repository: CRAN
-Date/Publication: 2023-07-15 06:00:02 UTC
+Date/Publication: 2023-09-11 20:50:02 UTC

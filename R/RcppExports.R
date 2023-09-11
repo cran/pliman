@@ -45,12 +45,16 @@ help_isolate_object <- function(R, G, B, labels, remove_bg, edge) {
     .Call(`_pliman_help_isolate_object`, R, G, B, labels, remove_bg, edge)
 }
 
-help_shp <- function(rows, cols, dims) {
-    .Call(`_pliman_help_shp`, rows, cols, dims)
+help_shp <- function(rows, cols, dims, buffer_x, buffer_y) {
+    .Call(`_pliman_help_shp`, rows, cols, dims, buffer_x, buffer_y)
 }
 
 help_otsu <- function(img) {
     .Call(`_pliman_help_otsu`, img)
+}
+
+helper_guo_hall <- function(image) {
+    .Call(`_pliman_helper_guo_hall`, image)
 }
 
 help_area <- function(coord) {

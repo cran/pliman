@@ -596,47 +596,50 @@ List help_isolate_object(NumericMatrix R, NumericMatrix G, NumericMatrix B, Inte
   return isolated_objects;
 }
 
-
-// COORDINATES OF A SHAPEFILE
 // [[Rcpp::export]]
-NumericMatrix help_shp(int rows, int cols, NumericVector dims) {
+NumericMatrix help_shp(int rows, int cols, NumericVector dims, double buffer_x, double buffer_y) {
   double xmin = dims[0];
   double xmax = dims[1];
   double ymin = dims[2];
   double ymax = dims[3];
   double xr = xmax - xmin;
   double yr = ymax - ymin;
+
   double intx = xr / cols;
-  NumericVector xvec(cols + 1);
-  xvec[0] = xmin;
-  for (int i = 1; i <= cols; i++) {
-    xvec[i] = xvec[i - 1] + intx;
-  }
   double inty = yr / rows;
-  NumericVector yvec(rows + 1);
-  yvec[0] = ymin;
-  for (int i = 1; i <= rows; i++) {
-    yvec[i] = yvec[i - 1] + inty;
-  }
+
   NumericMatrix coords(rows * cols * 5, 2);
   int con = 0;
+
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
       con++;
-      coords((con - 1) * 5, 0) = xvec[j];
-      coords((con - 1) * 5, 1) = yvec[i];
-      coords((con - 1) * 5 + 1, 0) = xvec[j + 1];
-      coords((con - 1) * 5 + 1, 1) = yvec[i];
-      coords((con - 1) * 5 + 2, 0) = xvec[j + 1];
-      coords((con - 1) * 5 + 2, 1) = yvec[i + 1];
-      coords((con - 1) * 5 + 3, 0) = xvec[j];
-      coords((con - 1) * 5 + 3, 1) = yvec[i + 1];
-      coords((con - 1) * 5 + 4, 0) = xvec[j];
-      coords((con - 1) * 5 + 4, 1) = yvec[i];
+
+      double x_start = xmin + j * intx;
+      double x_end = x_start + intx;
+      double y_start = ymin + i * inty;
+      double y_end = y_start + inty;
+
+      double buffered_x_start = x_start + buffer_x * intx;
+      double buffered_x_end = x_end - buffer_x * intx;
+      double buffered_y_start = y_start + buffer_y * inty;
+      double buffered_y_end = y_end - buffer_y * inty;
+
+      coords((con - 1) * 5, 0) = buffered_x_start;
+      coords((con - 1) * 5, 1) = buffered_y_start;
+      coords((con - 1) * 5 + 1, 0) = buffered_x_end;
+      coords((con - 1) * 5 + 1, 1) = buffered_y_start;
+      coords((con - 1) * 5 + 2, 0) = buffered_x_end;
+      coords((con - 1) * 5 + 2, 1) = buffered_y_end;
+      coords((con - 1) * 5 + 3, 0) = buffered_x_start;
+      coords((con - 1) * 5 + 3, 1) = buffered_y_end;
+      coords((con - 1) * 5 + 4, 0) = buffered_x_start;
+      coords((con - 1) * 5 + 4, 1) = buffered_y_start;
     }
   }
   return coords;
 }
+
 
 
 
@@ -704,3 +707,73 @@ double help_otsu(const NumericVector& img) {
 }
 
 
+
+
+
+// Function to apply Guo-Hall thinning algorithm to a binary image
+// Adapted from https://observablehq.com/@esperanc/thinning#guoHall
+// [[Rcpp::export]]
+IntegerMatrix helper_guo_hall(IntegerMatrix image) {
+  int wid = image.ncol();
+  int hgt = image.nrow();
+  IntegerMatrix data2 = Rcpp::clone(image);
+
+  auto get = [&](int col, int row) { return image(row, col) != 0; };
+  auto set = [&](int col, int row) { data2(row, col) = 255; };
+  auto clear = [&](int col, int row) { data2(row, col) = 0; };
+
+  IntegerMatrix stepCounter(wid, hgt);
+
+  // Performs the conditional removal of one pixel. Even is true
+  // if this is an even iteration.
+  // Returns 1 if pixel was removed and 0 if not
+  auto removePixel = [&](int col, int row, bool even) {
+    if (!get(col, row)) return 0; // Not a 1-pixel
+    int p2 = get(col - 1, row);
+    int p3 = get(col - 1, row + 1);
+    int p4 = get(col, row + 1);
+    int p5 = get(col + 1, row + 1);
+    int p6 = get(col + 1, row);
+    int p7 = get(col + 1, row - 1);
+    int p8 = get(col, row - 1);
+    int p9 = get(col - 1, row - 1);
+    int C = ((!p2) & (p3 | p4)) + ((!p4) & (p5 | p6)) + ((!p6) & (p7 | p8)) + ((!p8) & (p9 | p2));
+    if (C != 1) return 0;
+    int N1 = (p9 | p2) + (p3 | p4) + (p5 | p6) + (p7 | p8);
+    int N2 = (p2 | p3) + (p4 | p5) + (p6 | p7) + (p8 | p9);
+    int N = (N1 < N2) ? N1 : N2;
+    if (N < 2 || N > 3) return 0;
+    int m = even ? ((p6 | p7 | (!p9)) & p8) : ((p2 | p3 | (!p5)) & p4);
+    if (m == 0) {
+      clear(col, row);
+      stepCounter(row, col) = 1;
+      return 1;
+    }
+    return 0;
+  };
+
+  bool even = true;
+
+  // Performs one thinning step.
+  // Returns the number of removed pixels
+  auto thinStep = [&]() {
+    int result = 0;
+    for (int row = 1; row < hgt - 1; row++) {
+      for (int col = 1; col < wid - 1; col++) {
+        result += removePixel(col, row, even);
+      }
+    }
+    even = !even;
+    image = clone(data2); // Copy data2 back to image
+    return result;
+  };
+
+  // Performs the thinning algorithm
+  int n = 0;
+  do {
+    stepCounter.fill(0);
+    n = thinStep();
+  } while (n > 0);
+
+  return image;
+}

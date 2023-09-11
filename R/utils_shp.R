@@ -8,6 +8,10 @@
 #' @param img An object of class `Image`
 #' @param nrow The number of desired rows in the grid. Defaults to `1`.
 #' @param ncol The number of desired columns in the grid. Defaults to `1`.
+#' @param buffer_x,buffer_y Buffering factor for the width and height,
+#'   respectively, of each individual shape's side. A value between 0 and 0.5 where 0
+#'   means no buffering and 0.5 means complete buffering (default: 0). A value of
+#'   0.25 will buffer the shape by 25% on each side.
 #' @param interactive If `FALSE` (default) the grid is created automatically
 #'   based on the image dimension and number of rows/columns. If `interactive =
 #'   TRUE`, users must draw points at the diagonal of the desired bounding box
@@ -37,6 +41,8 @@
 image_shp <- function(img,
                       nrow = 1,
                       ncol = 1,
+                      buffer_x = 0,
+                      buffer_y = 0,
                       interactive = FALSE,
                       viewer = get_pliman_viewer(),
                       col_line = "red",
@@ -64,7 +70,7 @@ image_shp <- function(img,
   bbox <-
     data.frame(x = c(c1[1], c1[2], c1[2], c1[1], c1[1]),
                y = c(c1[3], c1[3], c1[4], c1[4], c1[3]))
-  shps <- help_shp(nrow, ncol, c1)
+  shps <- help_shp(nrow, ncol, c1, buffer_x = buffer_x, buffer_y = buffer_y)
   shps <- data.frame(plot = paste0(rep(1:(ncol * nrow), each = 5)), shps)
   colnames(shps) <- c("plot", "x", "y")
   coords <- split(shps, shps$plot)
@@ -166,13 +172,20 @@ plot.image_shp <- function(x,
 object_split_shp <- function(img,
                              nrow = 1,
                              ncol = 1,
+                             buffer_x = 0,
+                             buffer_y = 0,
                              interactive = FALSE,
                              viewer = get_pliman_viewer(),
                              only_shp = FALSE,
                              ...){
   vieweropt <- c("base", "mapview")
   vieweropt <- vieweropt[pmatch(viewer[1], vieweropt)]
-  shps <- image_shp(img, nrow, ncol, interactive = interactive, plot = FALSE, viewer = vieweropt, ...)
+  shps <- image_shp(img, nrow, ncol,
+                    buffer_x = buffer_x,
+                    buffer_y = buffer_y,
+                    interactive = interactive,
+                    plot = FALSE,
+                    viewer = vieweropt, ...)
   shapefile <- shps$shapefiles
   if(!isTRUE(only_shp)){
     imgs <- list()
@@ -196,6 +209,199 @@ object_split_shp <- function(img,
   }
   return(list(imgs = imgs,
               shapefile = shps))
+}
+
+
+#' Export multiple objects from an image to multiple images
+#'
+#' Givin an image with multiple objects, `object_export_shp()` will split the
+#' objects into a list of objects using [object_split_shp()] and then export
+#' them to multiple images into the current working directory (or a subfolder).
+#' Batch processing is performed by declaring a file name pattern that matches
+#' the images within the working directory.
+#'
+#' @inheritParams object_split_shp
+#' @inheritParams utils_image
+#' @inheritParams analyze_objects
+#'
+#' @param pattern A pattern of file name used to identify images to be
+#'   processed. For example, if `pattern = "im"` all images in the current
+#'   working directory that the name matches the pattern (e.g., img1.-,
+#'   image1.-, im2.-) will be imported and processed. Providing any number as
+#'   pattern (e.g., `pattern = "1"`) will select images that are named as 1.-,
+#'   2.-, and so on. An error will be returned if the pattern matches any file
+#'   that is not supported (e.g., img1.pdf).
+#'@param dir_original The directory containing the original images. Defaults to
+#'  `NULL`. It can be either a full path, e.g., `"C:/Desktop/imgs"`, or a
+#'  subfolder within the current working directory, e.g., `"/imgs"`.
+#' @param dir_processed Optional character string indicating a subfolder within the
+#'   current working directory to save the image(s). If the folder doesn't
+#'   exist, it will be created.
+#' @param format The format of image to be exported.
+#' @param squarize Squarizes the image before the exportation? If `TRUE`,
+#'   [image_square()] will be called internally.
+#' @return A `NULL` object.
+#' @export
+#'
+#' @examples
+#' if(interactive()){
+#' library(pliman)
+#' flax <- image_pliman("flax_leaves.jpg", plot = TRUE)
+#' object_export_shp(flax)
+#'
+#' }
+object_export_shp <- function(img,
+                              pattern = NULL,
+                              dir_original = NULL,
+                              dir_processed = NULL,
+                              format = ".jpg",
+                              subfolder = NULL,
+                              squarize = FALSE,
+                              nrow = 1,
+                              ncol = 1,
+                              buffer_x = 0,
+                              buffer_y = 0,
+                              interactive = FALSE,
+                              parallel = FALSE,
+                              verbose = TRUE,
+                              viewer = get_pliman_viewer()){
+  if(is.null(pattern)){
+    list_objects <- object_split_shp(img,
+                                     nrow = nrow,
+                                     ncol = ncol,
+                                     buffer_x = buffer_x,
+                                     buffer_y = buffer_y,
+                                     interactive = interactive,
+                                     viewer = viewer)[["imgs"]]
+
+    a <- lapply(seq_along(list_objects), function(i){
+      tmp <- list_objects[[i]]
+      if(isTRUE(squarize)){
+        tmp <- image_square(tmp,
+                            plot = FALSE,
+                            sample_left = 10,
+                            sample_top = 10,
+                            sample_right = 10,
+                            sample_bottom = 10)
+      }
+      image_export(tmp,
+                   name = paste0(names(list_objects[i]), format),
+                   subfolder = dir_processed)
+    })
+  } else{
+    if(is.null(dir_original)){
+      diretorio_original <- paste0("./")
+    } else{
+      diretorio_original <-
+        ifelse(grepl("[/\\]", dir_original),
+               dir_original,
+               paste0("./", dir_original))
+    }
+    if(is.null(dir_processed)){
+      diretorio_processada <- paste0("./")
+    } else{
+      diretorio_processada <-
+        ifelse(grepl("[/\\]", dir_processed),
+               dir_processed,
+               paste0("./", dir_processed))
+    }
+
+    if(pattern %in% c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")){
+      pattern <- "^[0-9].*$"
+    }
+    plants <- list.files(pattern = pattern, diretorio_original)
+    extensions <- as.character(sapply(plants, file_extension))
+    names_plant <- as.character(sapply(plants, file_name))
+    if(length(grep(pattern, names_plant)) == 0){
+      stop(paste("Pattern '", pattern, "' not found in '",
+                 paste(getwd(), sub(".", "", diretorio_original), sep = ""), "'", sep = ""),
+           call. = FALSE)
+    }
+    if(!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))){
+      stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
+    }
+
+
+    if(isTRUE(parallel)){
+
+      init_time <- Sys.time()
+      nworkers <- trunc(detectCores()*.3)
+      cl <- parallel::makePSOCKcluster(nworkers)
+      doParallel::registerDoParallel(cl)
+      on.exit(stopCluster(cl))
+
+      if(verbose == TRUE){
+        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
+      }
+      ## declare alias for dopar command
+      `%dopar%` <- foreach::`%dopar%`
+
+      results <-
+        foreach::foreach(i = seq_along(plants), .packages = c("pliman")) %dopar%{
+
+          tmpimg <- image_import(plants[[i]], path = diretorio_original)
+
+          list_objects <- object_split_shp(tmpimg,
+                                           nrow = nrow,
+                                           ncol = ncol,
+                                           buffer_x = buffer_x,
+                                           buffer_y = buffer_y,
+                                           interactive = interactive,
+                                           viewer = viewer)[["imgs"]]
+
+          a <- lapply(seq_along(list_objects), function(j){
+            tmp <- list_objects[[j]]
+            if(isTRUE(squarize)){
+              tmp <- image_square(tmp,
+                                  plot = FALSE,
+                                  sample_left = 10,
+                                  sample_top = 10,
+                                  sample_right = 10,
+                                  sample_bottom = 10)
+            }
+            image_export(tmp,
+                         name = paste0(file_name(plants[[i]]), "_", names(list_objects[j]), format),
+                         subfolder = diretorio_processada)
+          }
+          )
+        }
+
+      message("Done!")
+      message("Elapsed time: ", sec_to_hms(as.numeric(difftime(Sys.time(),  init_time, units = "secs"))))
+
+    } else{
+
+      for(i in seq_along(plants)){
+        tmpimg <- image_import(plants[[i]], path = diretorio_original)
+
+        list_objects <- object_split_shp(tmpimg,
+                                         nrow = nrow,
+                                         ncol = ncol,
+                                         buffer_x = buffer_x,
+                                         buffer_y = buffer_y,
+                                         interactive = interactive,
+                                         viewer = viewer)[["imgs"]]
+
+        a <- lapply(seq_along(list_objects), function(j){
+          tmp <- list_objects[[j]]
+          if(isTRUE(squarize)){
+            tmp <- image_square(tmp,
+                                plot = FALSE,
+                                sample_left = 10,
+                                sample_top = 10,
+                                sample_right = 10,
+                                sample_bottom = 10)
+          }
+          image_export(tmp,
+                       name = paste0(file_name(plants[[i]]), "_", names(list_objects[j]), format),
+                       subfolder = diretorio_processada)
+        })
+      }
+    }
+
+
+  }
+
 }
 
 
@@ -313,6 +519,7 @@ image_align <- function(img,
 #'
 #'
 #' @inheritParams analyze_objects
+#' @inheritParams  image_shp
 #'
 #' @param img An `Image` object
 #' @param nrow,ncol The number of rows and columns to generate the shapefile
@@ -363,6 +570,8 @@ image_align <- function(img,
 analyze_objects_shp <- function(img,
                                 nrow = 1,
                                 ncol = 1,
+                                buffer_x = 0,
+                                buffer_y = 0,
                                 prepare = FALSE,
                                 viewer = get_pliman_viewer(),
                                 index = "R",
@@ -396,13 +605,20 @@ analyze_objects_shp <- function(img,
                           object_index = object_index)$mask
   object_index_used <- object_index
   if(is.null(shapefile)){
-    tmp <- object_split_shp(img, nrow, ncol, interactive = interactive, only_shp = FALSE)
+    tmp <- object_split_shp(img, nrow, ncol,
+                            buffer_x = buffer_x,
+                            buffer_y = buffer_y,
+                            interactive = interactive,
+                            only_shp = FALSE)
     imgs <- tmp$imgs
     shapes <- tmp$shapefile$shapefiles
   } else{
     nrow <- shapefile$nrow
     ncol <- shapefile$ncol
-    tmp <- object_split_shp(img, nrow, ncol, interactive = FALSE, only_shp = FALSE)
+    tmp <- object_split_shp(img, nrow, ncol,
+                            buffer_x = buffer_x,
+                            buffer_y = buffer_y,
+                            interactive = FALSE, only_shp = FALSE)
     imgs <- tmp$imgs
     shapes <- tmp$shapefile$shapefiles
   }
@@ -725,6 +941,122 @@ plot_shp <- function(coords,
   })
 }
 
+
+#' Plot rectangles colored by a quantitative attribute and overlay on an RGB
+#' image
+#'
+#' This function plots rectangles on top of an RGB image, where each rectangle
+#' is colored based on a quantitative variable. The quantitative variable is
+#' specified in the `attribute` argument and should be present in the
+#' `object_index` of the `object` computed using [analyze_objects_shp()]. The
+#' rectangles are colored using a color scale.
+#'
+#' @param object An object computed with [analyze_objects_shp()].
+#' @param attribute The name of the quantitative variable in the
+#'   \code{object_index} to be used for coloring the rectangles.
+#' @param color A vector of two colors to be used for the color scale.
+#' @param alpha The transparency level of the rectangles' color (between 0 and 1).
+#' @param legend.position The position of the color legend, either
+#'   \code{"bottom"} or \code{"right"}.
+#' @param na.color The color to be used for rectangles with missing values in
+#'   the quantitative variable.
+#' @param classes The number of classes in the color scale.
+#' @param round The number of decimal places to round the legend values.
+#' @param horiz Logical, whether the legend should be horizontal (\code{TRUE})
+#'   or vertical (\code{FALSE}).
+#' @return The function plots rectangles colored by the specified quantitative
+#'   variable on top of the RGB image and shows the continuous color legend
+#'   outside the plot.
+#' @importFrom grDevices colorRamp
+#' @export
+#'
+#' @examples
+#' if(interactive()){
+#' library(pliman)
+#'
+#' # Computes the DGCI index for each flax leaf
+#' flax <- image_pliman("flax_leaves.jpg", plot =TRUE)
+#' res <-
+#'    analyze_objects_shp(flax,
+#'                        buffer_x = 0.2,
+#'                        buffer_y = 0.2,
+#'                        nrow = 3,
+#'                        ncol = 5,
+#'                        plot = FALSE,
+#'                        object_index = "DGCI")
+#' plot(res$final_image)
+#' plot_index_shp(res)
+#' }
+#'
+plot_index_shp <- function(object,
+                           attribute = "coverage",
+                           color = c("red","green"),
+                           alpha = 0.5,
+                           legend.position = "bottom",
+                           na.color = "gray",
+                           classes = 6,
+                           round = 3,
+                           horiz = TRUE) {
+  if(!is.null(object$object_index)){
+    quant_var <- aggregate(. ~ img, data = object[["object_index"]], FUN = mean)
+    quant_var <- cbind(quant_var, coverage =  aggregate(coverage ~ img, data = object$results, FUN = sum)$coverage)
+  } else{
+    quant_var <- aggregate(coverage ~ img, data = object$results, FUN = sum)
+  }
+  get_numeric_from_img <- function(x) {
+    as.numeric(gsub("shp", "", x))
+  }
+  quant_var <- quant_var[order(get_numeric_from_img(quant_var$img)), ]
+  if(!attribute %in% names(quant_var)){
+    stop("Attribute not found. Have you included it in the `object_index` argument from `analyze_objects_shp()`?", call. = FALSE)
+  }
+  quant_variable <- quant_var[, attribute]
+  coords_list <- object$shapefiles$shapefiles
+
+  # Combine all rectangles into one data frame for plotting
+  all_rectangles <- do.call(rbind, coords_list)
+
+  # Define the xmax, xmin, ymax, ymin of the image
+  xmax <- max(all_rectangles$x)
+  xmin <- min(all_rectangles$x)
+  ymax <- max(all_rectangles$y)
+  ymin <- min(all_rectangles$y)
+
+  # Normalize the quantitative variable for color scaling
+  rr <- range(quant_variable, na.rm = TRUE)
+  svals <- (quant_variable - rr[1]) / diff(rr)
+  svals[is.na(svals)] <- 0
+
+  # Create the color ramp function
+  f <- colorRamp(color)
+
+  # Calculate colors based on the normalized values and alpha
+  valcol <- rgb(f(svals)/255, alpha = alpha)
+  valcol[is.na(svals)] <- rgb(t(col2rgb(col = na.color, alpha = FALSE))/255, alpha = alpha)
+
+  # Add RGB image (raster) on the plot
+  plot(object$final_image)
+
+  for (i in 1:length(coords_list)) {
+    rect(min(coords_list[[i]]$x), min(coords_list[[i]]$y), max(coords_list[[i]]$x), max(coords_list[[i]]$y), col = valcol[i], border = NA)
+    rect(min(coords_list[[i]]$x), min(coords_list[[i]]$y), max(coords_list[[i]]$x), max(coords_list[[i]]$y), col = NA, border = "black")
+  }
+
+  # Generate the legend
+  pos <- round(seq(min(quant_variable, na.rm = TRUE),
+                   max(quant_variable, na.rm = TRUE),
+                   length.out = classes), round)
+  if (any(is.na(quant_variable))) {
+    pos <- c(pos, "NA")
+  }
+  col <- rgb(f(seq(0, 1, length.out = classes))/255, alpha = alpha)
+  if (any(is.na(quant_variable))) {
+    col <- c(col, rgb(t(col2rgb(col = na.color, alpha = FALSE))/255, alpha = alpha))
+  }
+  legend(legend.position, title = attribute, legend = pos, fill = col, bty = "n", horiz = horiz)
+}
+
+
 #' Measure disease using shapefiles
 #'
 #' This function calls [measure_disease()] in each image polygon of a shapefile
@@ -732,6 +1064,7 @@ plot_shp <- function(coords,
 #' frames.
 #'
 #' @inheritParams measure_disease
+#' @inheritParams image_shp
 #'
 #' @param img The image to be analyzed. Either an image of class `Image` or a
 #'   character string containing the image name. In the last, the image will be
@@ -771,6 +1104,8 @@ plot_shp <- function(coords,
 measure_disease_shp <- function(img,
                                 nrow = 1,
                                 ncol = 1,
+                                buffer_x = 0,
+                                buffer_y = 0,
                                 prepare = FALSE,
                                 viewer = "mapview",
                                 index_lb = "HUE2",
@@ -803,6 +1138,8 @@ measure_disease_shp <- function(img,
   help_meas_shp <- function(img,
                             nrow,
                             ncol,
+                            buffer_x,
+                            buffer_y,
                             index_lb,
                             index_dh,
                             threshold,
@@ -820,7 +1157,11 @@ measure_disease_shp <- function(img,
       name_ori <- match.call()[[2]]
       extens_ori <- "jpg"
     }
-    tmp <- object_split_shp(img, nrow, ncol, interactive = interactive, only_shp = FALSE)
+    tmp <- object_split_shp(img, nrow, ncol,
+                            buffer_x = buffer_x,
+                            buffer_y = buffer_y,
+                            interactive = interactive,
+                            only_shp = FALSE)
     imgs <- tmp$imgs
     shapes <- tmp$shapefile$shapefiles
 
@@ -903,6 +1244,8 @@ measure_disease_shp <- function(img,
     results <- help_meas_shp(img,
                              nrow,
                              ncol,
+                             buffer_x,
+                             buffer_y,
                              index_lb,
                              index_dh,
                              threshold,
@@ -938,6 +1281,8 @@ measure_disease_shp <- function(img,
           help_meas_shp(names_plant[[i]],
                         nrow,
                         ncol,
+                        buffer_x,
+                        buffer_y,
                         index_lb,
                         index_dh,
                         threshold,
@@ -956,6 +1301,8 @@ measure_disease_shp <- function(img,
         results[[i]] <- help_meas_shp(img  = names_plant[i],
                                       nrow,
                                       ncol,
+                                      buffer_x,
+                                      buffer_y,
                                       index_lb,
                                       index_dh,
                                       threshold,
