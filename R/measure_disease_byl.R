@@ -10,9 +10,13 @@
 #'
 #' @inheritParams object_split
 #' @inheritParams measure_disease
-#' @param dir_original The directory containing the original and processed images.
-#'   Defaults to `NULL`. In this case, the function will search for the image `img` in the
-#'   current working directory.
+#' @param dir_original,dir_processed The directory containing the original and
+#'   processed images. Defaults to `NULL`. In this case, the function will
+#'   search for the image `img` in the current working directory. After
+#'   processing, when `save_image = TRUE`, the processed image will be also
+#'   saved in such a directory. It can be either a full path, e.g.,
+#'   `"C:/Desktop/imgs"`, or a subfolder within the current working directory,
+#'   e.g., `"/imgs"`.
 #' @param index A character value specifying the target mode for
 #'   conversion to binary to segment the leaves from background. Defaults to "B"
 #'   (blue). See [image_index()] for more details. Personalized indexes can be
@@ -55,15 +59,16 @@ measure_disease_byl <- function(img,
                                 extension = NULL,
                                 tolerance = NULL,
                                 object_size = "large",
-                                dir_original = NULL,
                                 img_healthy = NULL,
                                 img_symptoms = NULL,
+                                plot = TRUE,
+                                save_image = FALSE,
+                                dir_original = NULL,
+                                dir_processed = NULL,
                                 pattern = NULL,
                                 parallel = FALSE,
                                 workers = NULL,
-                                plot = TRUE,
                                 show_features = FALSE,
-                                save_image = FALSE,
                                 verbose = TRUE,
                                 ...){
 
@@ -75,21 +80,29 @@ measure_disease_byl <- function(img,
              dir_original,
              paste0("./", dir_original))
   }
-  if (is.character(img_healthy)){
-    all_files <- sapply(list.files(getwd()), file_name)
-    imag <- list.files(getwd(), pattern = img_healthy)
-    check_names_dir(img_healthy, all_files, getwd())
-    name <- file_name(imag)
-    extens <- file_extension(imag)
-    img_healthy <- image_import(paste(getwd(), "/", name, ".", extens, sep = ""))
+  if(is.null(dir_processed)){
+    diretorio_processada <- paste("./", sep = "")
+  } else{
+    diretorio_processada <-
+      ifelse(grepl("[/\\]", dir_processed),
+             dir_processed,
+             paste0("./", dir_processed))
   }
-  if (is.character(img_symptoms)){
-    all_files <- sapply(list.files(getwd()), file_name)
-    imag <- list.files(getwd(), pattern = img_symptoms)
-    check_names_dir(img_symptoms, all_files, getwd())
-    name <- file_name(imag)
+  if(is.character(img_healthy)){
+    all_files <- sapply(list.files(diretorio_original), file_name)
+    imag <- list.files(diretorio_original, pattern = img_healthy)
+    check_names_dir(img_healthy, all_files, "")
+    name_h <- file_name(imag)
     extens <- file_extension(imag)
-    img_symptoms <- image_import(paste(getwd(), "/", name, ".", extens, sep = ""))
+    img_healthy <- image_import(paste(diretorio_original, "/", name_h, ".", extens, sep = ""))
+  }
+  if(is.character(img_symptoms)){
+    all_files <- sapply(list.files(diretorio_original), file_name)
+    imag <- list.files(diretorio_original, pattern = img_symptoms)
+    check_names_dir(img_symptoms, all_files, "")
+    name_h <- file_name(imag)
+    extens <- file_extension(imag)
+    img_symptoms <- image_import(paste(diretorio_original, "/", name_h, ".", extens, sep = ""))
   }
   back <- EBImage::Image(rep(1, 100*300),dim=c(100,300,3), colormode = 'Color')
 
@@ -121,14 +134,10 @@ measure_disease_byl <- function(img,
                            extension = extension,
                            tolerance = tolerance,
                            object_size = object_size,
+                           remove_bg = TRUE,
                            plot = FALSE,
                            verbose = FALSE)
     results <- list()
-    tmp_dir <- tempdir()
-    if(isTRUE(plot)){
-      save_image <- FALSE
-      clear_td()
-    }
     if(is.null(img_healthy)){
       results <-
         lapply(seq_along(splits),
@@ -136,13 +145,14 @@ measure_disease_byl <- function(img,
                  measure_disease(splits[[i]],
                                  index_dh = index_dh,
                                  index_lb = index_lb,
-                                 plot = FALSE,
-                                 save_image = TRUE,
+                                 plot = plot,
+                                 save_image = save_image,
                                  show_features = show_features,
-                                 dir_processed = tmp_dir,
+                                 dir_processed = diretorio_processada,
                                  prefix = paste0(name_ori, "_", i),
                                  name = "",
-                                 filter = FALSE,
+                                 filter = filter,
+                                 threshold = threshold,
                                  ...)
                })
 
@@ -154,22 +164,18 @@ measure_disease_byl <- function(img,
                                  img_healthy = img_healthy,
                                  img_symptoms = img_symptoms,
                                  img_background = back,
-                                 plot = FALSE,
-                                 save_image = TRUE,
+                                 plot = plot,
                                  show_features = show_features,
-                                 dir_processed = tmp_dir,
+                                 save_image = save_image,
+                                 dir_processed = diretorio_processada,
                                  prefix = paste0(name_ori, "_", i),
                                  name = "",
-                                 filter = FALSE,
+                                 filter = filter,
+                                 threshold = threshold,
                                  ...)
                })
     }
     names(results) <- paste0(name_ori, "-", 1:length(results))
-    if(isTRUE(plot)){
-      imgs <- image_import(pattern = as.character(name_ori), path = tmp_dir)
-      image_combine(imgs)
-      clear_td()
-    }
     severity <-
       do.call(rbind,
               lapply(seq_along(results), function(i){
@@ -211,7 +217,7 @@ measure_disease_byl <- function(img,
       shape <- NULL
       stats <- NULL
     }
-    return(
+    invisible(
       structure(
         list(severity = severity,
              stats = stats,
@@ -245,7 +251,7 @@ measure_disease_byl <- function(img,
                     envir=environment())
       on.exit(stopCluster(clust))
       if(verbose == TRUE){
-        message("Image processing using multiple sessions (",nworkers, "). Please wait.")
+        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
       results <-
         parLapply(clust, names_plant,
@@ -284,9 +290,10 @@ measure_disease_byl <- function(img,
                       img_healthy = img_healthy,
                       img_symptoms = img_symptoms,
                       dir_original = diretorio_original,
+                      dir_processed = diretorio_processada,
                       save_image = save_image))
   }
-  return(structure(
+  invisible(structure(
     results, class = "plm_disease_byl"
   ))
 }

@@ -42,7 +42,7 @@ means no buffering and 0.5 means complete buffering (default: 0). A value of
 0.25 will buffer the shape by 25\% on each side.}
 
 \item{prepare}{Logical value indicating whether to prepare the image for
-analysis using \code{\link[=image_prepare_mv]{image_prepare_mv()}} function. This allows to align and crop
+analysis using \code{\link[=image_prepare]{image_prepare()}} function. This allows to align and crop
 the image before processing. Defaults to \code{FALSE}.}
 
 \item{viewer}{The viewer option. If not provided, the value is retrieved
@@ -96,7 +96,7 @@ that will contain the grid.}
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
 the processing time, especially when \code{pattern} is used is informed. The
-number of sections is set up to 70\% of available cores.}
+number of sections is set up to 30\% of available cores.}
 
 \item{workers}{A positive numeric scalar or a function specifying the maximum
 number of parallel processes that can be active at the same time.}

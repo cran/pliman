@@ -11,6 +11,7 @@ analyze_objects(
   foreground = NULL,
   background = NULL,
   pick_palettes = FALSE,
+  segment_objects = TRUE,
   viewer = get_pliman_viewer(),
   reference = FALSE,
   reference_area = NULL,
@@ -26,6 +27,8 @@ analyze_objects(
   sigma_veins = 1,
   ab_angles = FALSE,
   ab_angles_percentiles = c(0.25, 0.75),
+  width_at = FALSE,
+  width_at_percentiles = c(0.05, 0.25, 0.5, 0.75, 0.95),
   haralick = FALSE,
   har_nbins = 32,
   har_scales = 1,
@@ -39,6 +42,11 @@ analyze_objects(
   invert = FALSE,
   object_size = "medium",
   index = "NB",
+  r = 1,
+  g = 2,
+  b = 3,
+  re = 4,
+  nir = 5,
   object_index = NULL,
   pixel_level_index = FALSE,
   return_mask = FALSE,
@@ -103,6 +111,13 @@ pick up the color palettes for foreground and background for the image. If
 \code{TRUE} \code{\link[=pick_palette]{pick_palette()}} will be called internally so that the user can sample
 color points representing foreground and background.}
 
+\item{segment_objects}{Segment objects in the image? Defaults to \code{TRUE}. In
+this case, objects are segmented using the index defined in the \code{index}
+argument, and each object is analyzed individually. If \code{segment_objects = FALSE} is used, the objects are not segmented and the entire image is
+analyzed. This is useful, for example, when analyzing an image without
+background, where an \code{object_index} could be computed for the entire image,
+like the index of a crop canopy.}
+
 \item{viewer}{The viewer option. This option controls the type of viewer to
 use for interactive plotting (eg., when \code{pick_palettes = TRUE}).  If not
 provided, the value is retrieved using \code{\link[=get_pliman_viewer]{get_pliman_viewer()}}.}
@@ -153,7 +168,7 @@ processing time when an image has lots of objects (say >1000).}
 
 \item{workers}{A positive numeric scalar or a function specifying the number
 of parallel processes that can be active at the same time. By default, the
-number of sections is set up to 50\% of available cores.}
+number of sections is set up to 30\% of available cores.}
 
 \item{watershed}{If \code{TRUE} (default) performs watershed-based object
 detection. This will detect objects even when they are touching one other.
@@ -180,6 +195,15 @@ with the argument \code{ab_angles_percentiles}.}
 object for which the angle should be computed (from the apex and the
 bottom). Defaults to c(0.25, 0.75), which means considering the 25th and
 75th percentiles of the object height.}
+
+\item{width_at}{Logical. If \code{TRUE}, the widths of the object at a given set
+of quantiles of the height are computed.}
+
+\item{width_at_percentiles}{A vector of heights along the vertical axis of
+the object at which the width will be computed. The default value is
+c(0.05, 0.25, 0.5, 0.75, 0.95), which means the function will return the
+width at the 5th, 25th, 50th, 75th, and 95th percentiles of the object's
+height.}
 
 \item{haralick}{Logical value indicating whether Haralick features are
 computed. Defaults to \code{FALSE}.}
@@ -235,6 +259,11 @@ grains), and \code{"elarge"} (e.g, soybean pods)`.}
 binary image when \code{foreground} and \code{background} are not declared. Defaults
 to \code{"NB"} (normalized blue). See \code{\link[=image_index]{image_index()}} for more details. User can
 also calculate your own index using the bands names, e.g. \code{index = "R+B/G"}}
+
+\item{r, g, b, re, nir}{The red, green, blue, red-edge, and near-infrared bands
+of the image, respectively. Defaults to 1, 2, 3, 4, and 5, respectively. If
+a multispectral image is provided (5 bands), check the order of bands,
+which are frequently presented in the 'BGR' format.}
 
 \item{object_index}{Defaults to \code{FALSE}. If an index is informed, the average
 value for each object is returned. It can be the R, G, and B values or any
@@ -583,6 +612,9 @@ the angle from the first pixel of the apex of the object to the two pixels
 that slice the object at the 25th percentile of the object height (apex
 angle). The base angle is computed in the same way but from the first base
 pixel.
+\item If \code{width_at = TRUE}, the width at the  5th, 25th, 50th, 75th, and 95th
+percentiles of the object height are computed by default. These quantiles can
+be adjusted with the \code{width_at_percentiles} argument.
 }
 }
 }

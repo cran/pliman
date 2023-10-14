@@ -62,7 +62,7 @@
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `pattern` is used is informed. The
-#'   number of sections is set up to 70% of available cores.
+#'   number of sections is set up to 30% of available cores.
 #' @param workers A positive numeric scalar or a function specifying the maximum
 #'   number of parallel processes that can be active at the same time.
 #' @param resize Resize the image before processing? Defaults to `FALSE`. Use a
@@ -257,7 +257,7 @@ measure_disease <- function(img,
                             dir_original = NULL,
                             dir_processed = NULL,
                             verbose = TRUE){
-  check_ebi()
+  # check_ebi()
   if(!missing(img) & !missing(pattern)){
     stop("Only one of `img` or `pattern` arguments can be used.", call. = FALSE)
   }
@@ -278,28 +278,28 @@ measure_disease <- function(img,
              paste0("./", dir_processed))
   }
   if(is.character(img_healthy)){
-    all_files <- sapply(list.files(getwd()), file_name)
-    imag <- list.files(getwd(), pattern = img_healthy)
+    all_files <- sapply(list.files(diretorio_original), file_name)
+    imag <- list.files(diretorio_original, pattern = img_healthy)
     check_names_dir(img_healthy, all_files, "")
     name_h <- file_name(imag)
     extens <- file_extension(imag)
-    img_healthy <- image_import(paste(getwd(), "/", name_h, ".", extens, sep = ""))
+    img_healthy <- image_import(paste(diretorio_original, "/", name_h, ".", extens, sep = ""))
   }
   if(is.character(img_symptoms)){
-    all_files <- sapply(list.files(getwd()), file_name)
-    imag <- list.files(getwd(), pattern = img_symptoms)
+    all_files <- sapply(list.files(diretorio_original), file_name)
+    imag <- list.files(diretorio_original, pattern = img_symptoms)
     check_names_dir(img_symptoms, all_files, "")
-    name_s <- file_name(imag)
+    name_h <- file_name(imag)
     extens <- file_extension(imag)
-    img_symptoms <- image_import(paste(getwd(), "/", name_s, ".", extens, sep = ""))
+    img_symptoms <- image_import(paste(diretorio_original, "/", name_h, ".", extens, sep = ""))
   }
   if(is.character(img_background)){
-    all_files <- sapply(list.files(getwd()), file_name)
-    imag <- list.files(getwd(), pattern = img_background)
+    all_files <- sapply(list.files(diretorio_original), file_name)
+    imag <- list.files(diretorio_original, pattern = img_background)
     check_names_dir(img_background, all_files, "")
-    name_b <- file_name(imag)
+    name_h <- file_name(imag)
     extens <- file_extension(imag)
-    img_background <- image_import(paste(getwd(), "/", name_b, ".", extens, sep = ""))
+    img_background <- image_import(paste(diretorio_original, "/", name_h, ".", extens, sep = ""))
   }
   help_count <-
     function(img, img_healthy, img_symptoms, img_background, resize, fill_hull, invert,
@@ -791,7 +791,7 @@ measure_disease <- function(img,
                       shape = shape,
                       statistics = stats)
       class(results) <- "plm_disease"
-      return(results)
+      invisible(results)
     }
 
   if(missing(pattern)){
@@ -816,14 +816,15 @@ measure_disease <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
+      init_time <- Sys.time()
+      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.3), workers)
       clust <- makeCluster(nworkers)
       clusterExport(clust,
                     varlist = c("names_plant", "help_count"),
                     envir=environment())
       on.exit(stopCluster(clust))
       if(verbose == TRUE){
-        message("Image processing using multiple sessions (",nworkers, "). Please wait.")
+        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
       results <-
         parLapply(clust, names_plant,
@@ -837,6 +838,7 @@ measure_disease <- function(img,
                   })
 
     } else{
+      init_time <- Sys.time()
       results <- list()
       pb <- progress(max = length(plants), style = 4)
       for (i in 1:length(plants)) {
@@ -883,7 +885,9 @@ measure_disease <- function(img,
                           img =  names(results[i]))[, c(3, 1:2)]
               })
       )
-    return(
+    message("Done!")
+    message("Elapsed time: ", sec_to_hms(as.numeric(difftime(Sys.time(),  init_time, units = "secs"))))
+    invisible(
       structure(
         list(severity = severity,
              shape = shape,
@@ -933,7 +937,7 @@ measure_disease_iter <- function(img,
                          title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
                          col = "blue")
     if(viewopt != "base"){
-      image_view(img |> reduce_dimensions(2000))
+      image_view(img[1:10,1:10,])
     }
   } else{
     back <- NULL
@@ -953,7 +957,7 @@ measure_disease_iter <- function(img,
                        title = "Use the first mouse button to pick up LEAF colors. Click 'Done' to finish",
                        col = "black")
   if(viewopt != "base"){
-    image_view(img |> reduce_dimensions(2000))
+    image_view(img[1:10,1:10,])
   }
 
   # Call pick_disease function
@@ -978,8 +982,8 @@ measure_disease_iter <- function(img,
                     img_background = back,
                     ...)
 
-  return(list(results = temp,
-              leaf = leaf,
-              disease = disease,
-              background = back))
+  invisible(list(results = temp,
+                 leaf = leaf,
+                 disease = disease,
+                 background = back))
 }

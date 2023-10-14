@@ -11,8 +11,14 @@ analyze_objects_shp(
   buffer_x = 0,
   buffer_y = 0,
   prepare = FALSE,
+  segment_objects = TRUE,
   viewer = get_pliman_viewer(),
   index = "R",
+  r = 1,
+  g = 2,
+  b = 3,
+  re = 4,
+  nir = 5,
   shapefile = NULL,
   interactive = FALSE,
   plot = FALSE,
@@ -24,6 +30,7 @@ analyze_objects_shp(
   efourier = FALSE,
   object_index = NULL,
   veins = FALSE,
+  width_at = FALSE,
   verbose = TRUE,
   invert = FALSE,
   ...
@@ -41,8 +48,15 @@ means no buffering and 0.5 means complete buffering (default: 0). A value of
 0.25 will buffer the shape by 25\% on each side.}
 
 \item{prepare}{Logical value indicating whether to prepare the image for
-analysis using \code{\link[=image_prepare_mv]{image_prepare_mv()}} function. Defaults to \code{FALSE}. Set to
+analysis using \code{\link[=image_prepare]{image_prepare()}} function. Defaults to \code{FALSE}. Set to
 \code{TRUE} to interactively align and crop the image before processing.}
+
+\item{segment_objects}{Segment objects in the image? Defaults to \code{TRUE}. In
+this case, objects are segmented using the index defined in the \code{index}
+argument, and each object is analyzed individually. If \code{segment_objects = FALSE} is used, the objects are not segmented and the entire image is
+analyzed. This is useful, for example, when analyzing an image without
+background, where an \code{object_index} could be computed for the entire image,
+like the index of a crop canopy.}
 
 \item{viewer}{The viewer option. If not provided, the value is retrieved
 using \code{\link[=get_pliman_viewer]{get_pliman_viewer()}}. This option controls the type of viewer to use
@@ -58,6 +72,11 @@ all functions.}
 binary image when \code{foreground} and \code{background} are not declared. Defaults
 to \code{"NB"} (normalized blue). See \code{\link[=image_index]{image_index()}} for more details. User can
 also calculate your own index using the bands names, e.g. \code{index = "R+B/G"}}
+
+\item{r, g, b, re, nir}{The red, green, blue, red-edge, and near-infrared bands
+of the image, respectively. Defaults to 1, 2, 3, 4, and 5, respectively. If
+a multispectral image is provided (5 bands), check the order of bands,
+which are frequently presented in the 'BGR' format.}
 
 \item{shapefile}{(Optional) An object created with \code{\link[=image_shp]{image_shp()}}. If \code{NULL}
 (default), both \code{nrow} and \code{ncol} must be declared.}
@@ -77,7 +96,7 @@ processing time when an image has lots of objects (say >1000).}
 
 \item{workers}{A positive numeric scalar or a function specifying the number
 of parallel processes that can be active at the same time. By default, the
-number of sections is set up to 50\% of available cores.}
+number of sections is set up to 30\% of available cores.}
 
 \item{watershed}{If \code{TRUE} (default) performs watershed-based object
 detection. This will detect objects even when they are touching one other.
@@ -110,6 +129,9 @@ detect edges. The result is the proportion of edges in relation to the
 entire area of the object(s) in the image. Note that \strong{THIS WILL BE AN
 OPERATION ON AN IMAGE LEVEL, NOT OBJECT!}.}
 
+\item{width_at}{Logical. If \code{TRUE}, the widths of the object at a given set
+of quantiles of the height are computed.}
+
 \item{verbose}{If \code{TRUE} (default) a summary is shown in the console.}
 
 \item{invert}{Inverts the binary image if desired. This is useful to process
@@ -133,7 +155,7 @@ Analyzes objects using shapefiles
 \details{
 The \code{analyze_objects_shp} function performs object analysis on an
 image and generates shapefiles representing the analyzed objects. The
-function first prepares the image for analysis using the \code{\link[=image_prepare_mv]{image_prepare_mv()}}
+function first prepares the image for analysis using the \code{\link[=image_prepare]{image_prepare()}}
 function if the \code{prepare} argument is set to \code{TRUE}. If a shapefile object is
 provided, the number of rows and columns for splitting the image is obtained
 from the shapefile. Otherwise, the image is split into multiple sub-images
@@ -141,7 +163,7 @@ based on the specified number of rows and columns using the
 \code{\link[=object_split_shp]{object_split_shp()}} function. The objects in each sub-image are analyzed
 using the \code{\link[=analyze_objects]{analyze_objects()}} function, and the results are stored in a list.
 If parallel processing is enabled, the analysis is performed in parallel
-using multiple workers. The analysis results is
+using multiple workers.
 
 The output object provides access to various components of the analysis
 results, such as the analyzed object coordinates and properties.
