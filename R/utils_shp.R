@@ -34,9 +34,11 @@
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg")
 #' shape <- image_shp(flax, nrow = 3, ncol = 5)
+#' }
 #'
 image_shp <- function(img,
                       nrow = 1,
@@ -106,6 +108,7 @@ image_shp <- function(img,
 #' @importFrom grDevices dev.list
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg")
 #' shape <- image_shp(flax, nrow = 3, ncol = 5)
@@ -113,6 +116,7 @@ image_shp <- function(img,
 #' # grid on the existing image
 #' plot(flax)
 #' plot(shape)
+#' }
 plot.image_shp <- function(x,
                            img = NULL,
                            col_line = "black",
@@ -163,7 +167,7 @@ plot.image_shp <- function(x,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg", plot = TRUE)
 #' objects <- object_split_shp(flax, nrow = 3, ncol = 5)
@@ -244,7 +248,7 @@ object_split_shp <- function(img,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg", plot = TRUE)
 #' object_export_shp(flax)
@@ -325,19 +329,17 @@ object_export_shp <- function(img,
     if(isTRUE(parallel)){
 
       init_time <- Sys.time()
-      nworkers <- trunc(detectCores()*.3)
-      cl <- parallel::makePSOCKcluster(nworkers)
-      doParallel::registerDoParallel(cl)
-      on.exit(stopCluster(cl))
+      nworkers <- trunc(parallel::detectCores()*.3)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
 
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
-      ## declare alias for dopar command
-      `%dopar%` <- foreach::`%dopar%`
 
       results <-
-        foreach::foreach(i = seq_along(plants), .packages = c("pliman")) %dopar%{
+        foreach::foreach(i = seq_along(plants)) %dofut%{
 
           tmpimg <- image_import(plants[[i]], path = diretorio_original)
 
@@ -443,7 +445,7 @@ object_export_shp <- function(img,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg", plot = TRUE)
 #' aligned <- image_align(flax)
@@ -452,6 +454,7 @@ image_align <- function(img,
                         align = c("vertical", "horizontal"),
                         viewer = get_pliman_viewer(),
                         plot = TRUE){
+  check_ebi()
   alignopt <- c("vertical", "horizontal")
   alignopt <- alignopt[pmatch(align[1], alignopt)]
   vieweropt <- c("base", "mapview")
@@ -552,7 +555,7 @@ image_align <- function(img,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #'
 #' # Computes the DGCI index for each flax leaf
@@ -587,7 +590,11 @@ analyze_objects_shp <- function(img,
                                 parallel = FALSE,
                                 workers = NULL,
                                 watershed = TRUE,
+                                opening = FALSE,
+                                closing = FALSE,
                                 filter = FALSE,
+                                erode = FALSE,
+                                dilate = FALSE,
                                 object_size = "medium",
                                 efourier = FALSE,
                                 object_index = NULL,
@@ -613,7 +620,11 @@ analyze_objects_shp <- function(img,
                           plot = FALSE,
                           return_mask = TRUE,
                           watershed = watershed,
+                          opening = opening,
+                          closing = closing,
                           filter = filter,
+                          erode = erode,
+                          dilate = dilate,
                           object_size = object_size,
                           object_index = object_index)$mask
   object_index_used <- object_index
@@ -642,17 +653,13 @@ analyze_objects_shp <- function(img,
   }
 
   if(parallel == TRUE){
-    workers <- ifelse(is.null(workers), ceiling(detectCores() * 0.3), workers)
-    cl <- parallel::makePSOCKcluster(workers)
-    doParallel::registerDoParallel(cl)
-    on.exit(stopCluster(cl))
+    nworkers <- ifelse(is.null(workers), ceiling(parallel::detectCores() * 0.3), workers)
+    future::plan(future::multisession, workers = nworkers)
+    on.exit(future::plan(future::sequential))
+    `%dofut%` <- doFuture::`%dofuture%`
 
-    ## declare alias for dopar command
-    `%dopar%` <- foreach::`%dopar%`
-
-
-    results <-
-      foreach::foreach(i = seq_along(imgs), .packages = "pliman") %dopar%{
+        results <-
+      foreach::foreach(i = seq_along(imgs)) %dofut%{
         analyze_objects(imgs[[i]],
                         index = index,
                         segment_objects = segment_objects,
@@ -669,7 +676,11 @@ analyze_objects_shp <- function(img,
                         efourier = efourier,
                         invert = invert,
                         watershed = watershed,
+                        opening = opening,
+                        closing = closing,
                         filter = filter,
+                        erode = erode,
+                        dilate = dilate,
                         return_mask = FALSE,
                         ...)
       }
@@ -692,7 +703,11 @@ analyze_objects_shp <- function(img,
                         efourier = efourier,
                         invert = invert,
                         watershed = watershed,
+                        opening = opening,
+                        closing = closing,
                         filter = filter,
+                        erode = erode,
+                        dilate = dilate,
                         return_mask = FALSE,
                         ...)
       })
@@ -879,7 +894,7 @@ analyze_objects_shp <- function(img,
 #'
 #' @export
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg", plot =TRUE)
 #' res <-
@@ -948,6 +963,7 @@ object_map <- function(object,
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' flax <- image_pliman("flax_leaves.jpg", plot =TRUE)
 #' res <-
@@ -956,6 +972,7 @@ object_map <- function(object,
 #'                        index = "R/(G/B)",
 #'                        plot = FALSE)
 #' object_mark(res)
+#' }
 object_mark <- function(object, col = "white"){
   if(!inherits(object, "anal_obj")){
     stop("Only objects computed with `analyze_objects_shp()` or `analyze_objects_shp()` can be used.")
@@ -991,6 +1008,7 @@ plot_shp <- function(coords,
 #' rectangles are colored using a color scale.
 #' @inheritParams image_shp
 #' @inheritParams plot_index
+#' @inheritParams image_view
 #' @param object An object computed with [analyze_objects_shp()].
 #' @param attribute The name of the quantitative variable in the
 #'   \code{object_index} to be used for coloring the rectangles.
@@ -1011,31 +1029,33 @@ plot_shp <- function(coords,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #'
 #' # Computes the DGCI index for each flax leaf
 #' flax <- image_pliman("flax_leaves.jpg", plot =TRUE)
 #' res <-
 #'    analyze_objects_shp(flax,
-#'                        buffer_x = 0.2,
-#'                        buffer_y = 0.2,
+#'                        buffer_x = 0.1,
+#'                        buffer_y = 0.02,
 #'                        nrow = 3,
 #'                        ncol = 5,
 #'                        plot = FALSE,
 #'                        object_index = "DGCI")
-#' plot(res$final_image)
-#' plot_index_shp(res)
+#' plot_index_shp(res, attribute = "DGCI")
 #' }
 #'
 plot_index_shp <- function(object,
                            attribute = "coverage",
-                           color = c("red","green"),
+                           r = 1,
+                           g = 2,
+                           b = 3,
+                           color = c("red", "yellow", "darkgreen"),
                            viewer = c("mapview", "base"),
                            max_pixels = 500000,
                            downsample = NULL,
                            downsample_fun = NULL,
-                           alpha = 0.5,
+                           alpha = 0.7,
                            legend.position = "bottom",
                            na.color = "gray",
                            classes = 6,
@@ -1101,14 +1121,19 @@ plot_index_shp <- function(object,
     sf_df <- cbind(sf_df, quant_var[, 2:ncol(quant_var)])
     sf_df <- sf::st_transform(sf_df, crs = sf::st_crs("+proj=utm +zone=32 +datum=WGS84 +units=m"))
     mp <-
-      mapview::mapview(sf_df,
-                       map.types = "OpenStreetMap",
-                       zcol = attribute,
-                       legend = TRUE,
-                       alpha.regions = alpha,
-                       layer.name = attribute)
-    rgb <- stars::st_as_stars(terra::rast(EBImage::transpose(object$final_image)@.Data[,,1:3]))
-    dimsto <- dim(rgb[,,,1])
+      suppressWarnings(
+        mapview::mapview(sf_df,
+                         col.regions = color,
+                         map.types = "OpenStreetMap",
+                         zcol = attribute,
+                         legend = TRUE,
+                         alpha.regions = alpha,
+                         layer.name = attribute)
+      )
+    rgb <- terra::rast(EBImage::transpose(object$final_image)@.Data[,,1:3])
+
+
+    dimsto <- dim(rgb)
     nr <- dimsto[1]
     nc <- dimsto[2]
     npix <- nc * nr
@@ -1116,40 +1141,29 @@ plot_index_shp <- function(object,
       message("The number of pixels is too high, which might slow the rendering process.")
     }
     if(npix > max_pixels){
+      possible_downsamples <- 0:50
+      possible_npix <- sapply(possible_downsamples, function(x){
+        compute_downsample(nr, nc, x)
+      })
       if(is.null(downsample)){
-        compute_downsample <- function(nr, nc, n) {
-          if (n == 0) {
-            invisible(nr * nc)
-          } else if (n == 1) {
-            invisible(ceiling(nr/2) * ceiling(nc/2))
-          } else if (n > 1) {
-            invisible(ceiling(nr/(n+1)) * ceiling(nc/(n+1)))
-          } else {
-            stop("Invalid downsampling factor. n must be a non-negative integer.")
-          }
-        }
-        possible_downsamples <- 0:100
-        possible_npix <- sapply(possible_downsamples, function(x){
-          compute_downsample(nr, nc, x)
-        })
-        downsample <- which.min(abs(possible_npix - max_pixels)) - 1
-        message(paste0("Using downsample = ", downsample, " so that the number of rendered pixels approximates the `max_pixels`"))
+        downsample <- which.min(abs(possible_npix - max_pixels))
+        downsample <- ifelse(downsample == 1, 0, downsample)
       }
-      rs <- stars::st_downsample(rgb[,,,1], n = downsample)
-      gs <- stars::st_downsample(rgb[,,,2], n = downsample)
-      bs <- stars::st_downsample(rgb[,,,3], n = downsample)
-      rgb <- terra::rast(c(rs, gs, bs, along = 3)) |> stars::st_as_stars()
+      if(downsample > 0){
+        message(paste0("Using downsample = ", downsample, " so that the number of rendered pixels approximates the `max_pixels`"))
+        rgb <- mosaic_aggregate(rgb, pct = round(100 / downsample))
+      }
     }
-
-    sf::st_crs(rgb) <- sf::st_crs("+proj=utm +zone=32 +datum=WGS84 +units=m ")
-
-    leafem::addStarsRGB(map = mp,
-                        x = rgb,
-                        r = 1,
-                        g = 2,
-                        b = 3,
-                        maxBytes = 16 * 1024 * 1024,
-                        na.color = "#00000000")
+    terra::crs(rgb) <- terra::crs("+proj=utm +zone=32 +datum=WGS84 +units=m ")
+    mapview::viewRGB(
+      layer.name = "base",
+      as(rgb, "Raster"),
+      r = r,
+      g = g,
+      b = b,
+      na.color = "#00000000",
+      maxpixels = 60000000
+    ) + mp
 
   } else{
     if(!is.null(object$object_index)){
@@ -1246,7 +1260,7 @@ plot_index_shp <- function(object,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' # severity for the three leaflets (from left to right)
 #' img <- image_pliman("mult_leaves.jpg", plot = TRUE)
 #' sev <-
@@ -1289,8 +1303,6 @@ measure_disease_shp <- function(img,
              dir_original,
              paste0("./", dir_original))
   }
-  ## declare alias for dopar command
-  `%dopar%` <- foreach::`%dopar%`
   # helper function
   help_meas_shp <- function(img,
                             nrow,
@@ -1426,15 +1438,15 @@ measure_disease_shp <- function(img,
     }
 
     if(parallel == TRUE){
-      workers2 <- ifelse(is.null(workers), ceiling(detectCores() * 0.2), workers)
-      cl2 <- parallel::makePSOCKcluster(workers2)
-      doParallel::registerDoParallel(cl2)
-      on.exit(stopCluster(cl2))
+      nworkers <- ifelse(is.null(workers), ceiling(parallel::detectCores() * 0.2), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
       if(verbose == TRUE){
-        message("Image processing using multiple sessions (",workers2, "). Please wait.")
+        message("Image processing using multiple sessions (",nworkers, "). Please wait.")
       }
       results <-
-        foreach::foreach(i = seq_along(names_plant), .packages = "pliman") %dopar%{
+        foreach::foreach(i = seq_along(names_plant)) %dofut%{
           help_meas_shp(names_plant[[i]],
                         nrow,
                         ncol,

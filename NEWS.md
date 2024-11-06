@@ -1,3 +1,18 @@
+# pliman 3.0.0
+## New Functions
+* Introduced the `mosaic_*()` family of functions for high-throughput phenotyping, enabling efficient analysis of large-scale image data.
+* Added the `shapefile_*()` functions for handling and manipulating shapefiles, providing streamlined spatial data management.
+
+## Minor Improvements
+* Fixed a documentation bug related to missing references.
+* Additional performance enhancements and minor bug fixes.
+
+# pliman 2.2.0
+## New functions
+* `mosaic_analyze()` to analyze orthomosaics.
+
+## Minor improvements
+* Imports the [poorman](https://github.com/nathaneastwood/poorman) package for data manipulation.
 # pliman 2.1.0
 ## New functions
 * A new `mosaic_*()` family of functions to handle orthomosaics from RGB and multispectral images.

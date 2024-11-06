@@ -11,7 +11,11 @@ measure_disease(
   img_symptoms = NULL,
   img_background = NULL,
   pattern = NULL,
-  filter = 10,
+  opening = c(10, 0),
+  closing = c(0, 0),
+  filter = c(0, 0),
+  erode = c(0, 0),
+  dilate = c(0, 0),
   parallel = FALSE,
   workers = NULL,
   resize = FALSE,
@@ -21,6 +25,7 @@ measure_disease(
   has_white_bg = FALSE,
   threshold = NULL,
   invert = FALSE,
+  lower_noise = 0.1,
   lower_size = NULL,
   upper_size = NULL,
   topn_lower = NULL,
@@ -58,6 +63,11 @@ measure_disease_iter(
   has_background = TRUE,
   r = 2,
   viewer = get_pliman_viewer(),
+  opening = c(10, 0),
+  closing = c(0, 0),
+  filter = c(0, 0),
+  erode = c(0, 0),
+  dilate = c(0, 0),
   show = "rgb",
   index = "NGRDI",
   ...
@@ -82,11 +92,25 @@ matches the pattern (e.g., img1.-, image1.-, im2.-) will be analyzed.
 Providing any number as pattern (e.g., \code{pattern = "1"}) will select
 images that are named as 1.-, 2.-, and so on.}
 
-\item{filter}{Performs median filtering in the binary image that segments the
-leaf from background? By default, a median filter of \code{size = 10} is applied.
-This is useful to reduce the noise and segment the leaf and background more
-accurately. See more at \code{\link[=image_filter]{image_filter()}}. Set to \code{FALSE} to cancel median
-filtering.}
+\item{erode, dilate, opening, closing, filter}{\strong{Morphological operations (brush size)}
+\itemize{
+\item \code{dilate} puts the mask over every background pixel, and sets it to
+foreground if any of the pixels covered by the mask is from the foreground.
+\item \code{erode} puts the mask over every foreground pixel, and sets it to
+background if any of the pixels covered by the mask is from the background.
+\item \code{opening} performs an erosion followed by a dilation. This helps to
+remove small objects while preserving the shape and size of larger objects.
+\item \code{closing} performs a dilatation followed by an erosion. This helps to
+fill small holes while preserving the shape and size of larger objects.
+\item \code{filter} performs median filtering in the binary image. Provide a positive
+integer > 1 to indicate the size of the median filtering. Higher values are
+more efficient to remove noise in the background but can dramatically impact
+the perimeter of objects, mainly for irregular perimeters such as leaves
+with serrated edges.
+}
+
+Hierarchically, the operations are performed as opening > closing > filter.
+The value declared in each argument will define the brush size.}
 
 \item{parallel}{Processes the images asynchronously (in parallel) in separate
 R sessions running in the background on the same machine. It may speed up
@@ -128,6 +152,11 @@ be a vector of length 2 to indicate the threshold for \code{index_lb} and
 
 \item{invert}{Inverts the binary image if desired. This is useful to process
 images with black background. Defaults to \code{FALSE}.}
+
+\item{lower_noise}{By default, lesions with lesser than 10\% of the mean area
+of all lesions are removed (\code{lower_noise = 0.1}). Increasing this value will
+remove larger lesions. To define an explicit lower or upper size (in pixel
+unit), use the \code{lower_size} and \code{upper_size} arguments.}
 
 \item{lower_size}{Lower limit for size for the image analysis. Leaf images
 often contain dirt and dust. To prevent dust from affecting the image
@@ -306,7 +335,7 @@ features for each object based on a gray-level co-occurrence matrix (Haralick
 et al. 1979). See more details in \code{\link[=analyze_objects]{analyze_objects()}}.
 }
 \examples{
-\donttest{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 img <- image_pliman("sev_leaf_nb.jpg")
 healthy <- image_pliman("sev_healthy.jpg")

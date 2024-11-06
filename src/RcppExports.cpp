@@ -199,6 +199,36 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// idw_interpolation_cpp
+NumericVector idw_interpolation_cpp(NumericVector x, NumericVector y, NumericVector values, NumericVector new_x, NumericVector new_y, double power);
+RcppExport SEXP _pliman_idw_interpolation_cpp(SEXP xSEXP, SEXP ySEXP, SEXP valuesSEXP, SEXP new_xSEXP, SEXP new_ySEXP, SEXP powerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type values(valuesSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type new_x(new_xSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type new_y(new_ySEXP);
+    Rcpp::traits::input_parameter< double >::type power(powerSEXP);
+    rcpp_result_gen = Rcpp::wrap(idw_interpolation_cpp(x, y, values, new_x, new_y, power));
+    return rcpp_result_gen;
+END_RCPP
+}
+// add_width_height_cpp
+List add_width_height_cpp(List grid, double width, double height, NumericVector points_align);
+RcppExport SEXP _pliman_add_width_height_cpp(SEXP gridSEXP, SEXP widthSEXP, SEXP heightSEXP, SEXP points_alignSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type grid(gridSEXP);
+    Rcpp::traits::input_parameter< double >::type width(widthSEXP);
+    Rcpp::traits::input_parameter< double >::type height(heightSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type points_align(points_alignSEXP);
+    rcpp_result_gen = Rcpp::wrap(add_width_height_cpp(grid, width, height, points_align));
+    return rcpp_result_gen;
+END_RCPP
+}
 // help_area
 Rcpp::RObject help_area(Rcpp::RObject coord);
 RcppExport SEXP _pliman_help_area(SEXP coordSEXP) {
@@ -241,6 +271,17 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
     rcpp_result_gen = Rcpp::wrap(help_centdist(data));
+    return rcpp_result_gen;
+END_RCPP
+}
+// help_centdist2
+NumericVector help_centdist2(NumericMatrix data);
+RcppExport SEXP _pliman_help_centdist2(SEXP dataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(help_centdist2(data));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -439,10 +480,13 @@ static const R_CallMethodDef CallEntries[] = {
     {"_pliman_help_shp", (DL_FUNC) &_pliman_help_shp, 5},
     {"_pliman_help_otsu", (DL_FUNC) &_pliman_help_otsu, 1},
     {"_pliman_helper_guo_hall", (DL_FUNC) &_pliman_helper_guo_hall, 1},
+    {"_pliman_idw_interpolation_cpp", (DL_FUNC) &_pliman_idw_interpolation_cpp, 6},
+    {"_pliman_add_width_height_cpp", (DL_FUNC) &_pliman_add_width_height_cpp, 4},
     {"_pliman_help_area", (DL_FUNC) &_pliman_help_area, 1},
     {"_pliman_help_slide", (DL_FUNC) &_pliman_help_slide, 2},
     {"_pliman_help_distpts", (DL_FUNC) &_pliman_help_distpts, 1},
     {"_pliman_help_centdist", (DL_FUNC) &_pliman_help_centdist, 1},
+    {"_pliman_help_centdist2", (DL_FUNC) &_pliman_help_centdist2, 1},
     {"_pliman_help_rotate", (DL_FUNC) &_pliman_help_rotate, 2},
     {"_pliman_help_align", (DL_FUNC) &_pliman_help_align, 1},
     {"_pliman_help_lw", (DL_FUNC) &_pliman_help_lw, 1},

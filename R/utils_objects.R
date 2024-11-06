@@ -24,10 +24,19 @@
 #' @param index The index to produce a binary image used to compute bounding
 #'   rectangle coordinates. See [image_binary()] for more details.
 #' @param invert Inverts the binary image, if desired. Defaults to `FALSE`.
-#' @param filter Performs median filtering in the binary image? See more at
-#'   [image_filter()]. Defaults to `FALSE`. Use a positive integer to define the
-#'   size of the median filtering. Larger values are effective at removing
-#'   noise, but adversely affect edges.
+#' @param opening,closing,filter **Morphological operations (brush size)**
+#'  * `opening` performs an erosion followed by a dilation. This helps to
+#'   remove small objects while preserving the shape and size of larger objects.
+#'  * `closing` performs a dilatation followed by an erosion. This helps to
+#'   fill small holes while preserving the shape and size of larger objects.
+#'  * `filter` performs median filtering in the binary image. Provide a positive
+#'  integer > 1 to indicate the size of the median filtering. Higher values are
+#'  more efficient to remove noise in the background but can dramatically impact
+#'  the perimeter of objects, mainly for irregular perimeters such as leaves
+#'  with serrated edges.
+#'
+#'   Hierarchically, the operations are performed as opening > closing > filter.
+#'   The value declared in each argument will define the brush size.
 #' @param fill_hull Fill holes in the objects? Defaults to `FALSE`.
 #' @param watershed If `TRUE` (default) performs watershed-based object
 #'   detection. This will detect objects even when they are touching one other.
@@ -64,7 +73,7 @@
 #' object.
 #' @export
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("la_leaves.jpg")
 #' # Get the object's (leaves) identification
@@ -83,6 +92,8 @@ object_coord <- function(img,
                          index = "NB",
                          watershed = TRUE,
                          invert = FALSE,
+                         opening = FALSE,
+                         closing = FALSE,
                          filter = FALSE,
                          fill_hull = FALSE,
                          threshold = "Otsu",
@@ -98,14 +109,16 @@ object_coord <- function(img,
       stop("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust, "img")
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
       message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      parLapply(clust, img, object_coord, id, index, invert,
-                fill_hull, threshold, edge, extension, tolerance,
-                object_size, plot)
+        foreach::foreach(i = seq_along(img)) %dofut%{
+          object_coord(img[[i]], id, index, invert,
+                       fill_hull, threshold, edge, extension, tolerance,
+                       object_size, plot)
+        }
     } else{
       lapply(img, object_coord, id, index, invert, fill_hull, threshold,
              edge, extension, tolerance, object_size, plot)
@@ -114,6 +127,8 @@ object_coord <- function(img,
     img2 <- help_binary(img,
                         index = index,
                         invert = invert,
+                        opening = opening,
+                        closing = closing,
                         filter = filter,
                         fill_hull = fill_hull,
                         threshold = threshold)
@@ -179,6 +194,8 @@ object_contour <- function(img,
                            center =  FALSE,
                            index = "NB",
                            invert = FALSE,
+                           opening = FALSE,
+                           closing = FALSE,
                            filter = FALSE,
                            fill_hull = FALSE,
                            threshold = "Otsu",
@@ -204,15 +221,19 @@ object_contour <- function(img,
       stop("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust, "img")
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
+
       message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      parLapply(clust, img, object_contour, pattern, dir_original, center, index, invert, filter, fill_hull, threshold,
-                watershed, extension, tolerance, object_size, plot = plot)
+        foreach::foreach(i = seq_along(img)) %dofut%{
+          object_contour(img[[i]],
+                         pattern, dir_original, center, index, invert, opening, closing, filter, fill_hull, threshold,
+                         watershed, extension, tolerance, object_size, plot = plot)
+        }
     } else{
-      lapply(img, object_contour, pattern, dir_original, center, index, invert, filter, fill_hull, threshold,
+      lapply(img, object_contour, pattern, dir_original, center, index, invert, opening, closing, filter, fill_hull, threshold,
              watershed, extension, tolerance, object_size, plot = plot)
     }
   } else{
@@ -220,6 +241,8 @@ object_contour <- function(img,
       img2 <- help_binary(img,
                           index = index,
                           invert = invert,
+                          opening = opening,
+                          closing = closing,
                           filter = filter,
                           fill_hull = fill_hull,
                           threshold = threshold)
@@ -280,6 +303,8 @@ object_contour <- function(img,
         img2 <- help_binary(img,
                             index = index,
                             invert = invert,
+                            opening = opening,
+                            closing = closing,
                             filter = filter,
                             fill_hull = fill_hull,
                             threshold = threshold)
@@ -315,17 +340,15 @@ object_contour <- function(img,
       if(parallel == TRUE){
         init_time <- Sys.time()
         nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-        cl <- parallel::makePSOCKcluster(nworkers)
-        doParallel::registerDoParallel(cl)
-        on.exit(parallel::stopCluster(cl))
+        future::plan(future::multisession, workers = nworkers)
+        on.exit(future::plan(future::sequential))
+        `%dofut%` <- doFuture::`%dofuture%`
 
         if(verbose == TRUE){
           message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
         }
-        ## declare alias for dopar command
-        `%dopar%` <- foreach::`%dopar%`
         results <-
-          foreach::foreach(i = seq_along(plants), .packages = c("pliman", "EBImage")) %dopar%{
+          foreach::foreach(i = seq_along(plants)) %dofut%{
             help_contour(plants[[i]])
           }
 
@@ -364,12 +387,14 @@ object_isolate <- function(img,
       stop("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust, "img")
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
       message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      parLapply(clust, img, object_isolate, id, ...)
+      foreach::foreach(i = seq_along(img)) %dofut%{
+        object_isolate(img[[i]], id)
+      }
     } else{
       lapply(img, object_isolate, id, ...)
     }
@@ -395,12 +420,14 @@ object_id <- function(img,
       stop("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust, "img")
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
       message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      parLapply(clust, img, object_id, ...)
+      foreach::foreach(i = seq_along(img)) %dofut%{
+        object_id(img[[i]], ...)
+      }
     } else{
       lapply(img, object_id, ...)
     }
@@ -432,9 +459,11 @@ object_id <- function(img,
 #' @seealso [analyze_objects()], [image_binary()]
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("la_leaves.jpg", plot = TRUE)
 #' imgs <- object_split(img) # set to NULL to use 50% of the cores
+#' }
 #'
 object_split <- function(img,
                          index = "NB",
@@ -442,7 +471,11 @@ object_split <- function(img,
                          watershed = TRUE,
                          invert = FALSE,
                          fill_hull = FALSE,
-                         filter = 2,
+                         opening = 3,
+                         closing = FALSE,
+                         filter = FALSE,
+                         erode = FALSE,
+                         dilate = FALSE,
                          threshold = "Otsu",
                          extension = NULL,
                          tolerance = NULL,
@@ -452,9 +485,14 @@ object_split <- function(img,
                          plot = TRUE,
                          verbose = TRUE,
                          ...){
+  check_ebi()
 
   img2 <- help_binary(img,
+                      opening = opening,
+                      closing = closing,
                       filter = filter,
+                      erode = erode,
+                      dilate = dilate,
                       index = index,
                       invert = invert,
                       fill_hull = fill_hull,
@@ -530,7 +568,7 @@ object_split <- function(img,
 #'
 #' @export
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("sev_leaf.jpg")
 #' imgs <- image_augment(img, type = "return", times = 4)
@@ -623,19 +661,17 @@ image_augment <- function(img,
     if(isTRUE(parallel)){
 
       init_time <- Sys.time()
-      nworkers <- trunc(detectCores()*.3)
-      cl <- parallel::makePSOCKcluster(nworkers)
-      doParallel::registerDoParallel(cl)
-      on.exit(stopCluster(cl))
+      nworkers <- trunc(parallel::detectCores()*.3)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
 
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
-      ## declare alias for dopar command
-      `%dopar%` <- foreach::`%dopar%`
       obj_list <- list()
       results <-
-        foreach::foreach(i = seq_along(plants), .packages = c("pliman")) %dopar%{
+        foreach::foreach(i = seq_along(plants)) %dofut%{
 
           tmpimg <- image_import(plants[[i]], path = diretorio_original)
 
@@ -747,7 +783,7 @@ image_augment <- function(img,
 #' @export
 #'
 #' @examples
-#' if(interactive()){
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("potato_leaves.jpg")
 #' object_export(img,
@@ -766,7 +802,11 @@ object_export <- function(img,
                           watershed = FALSE,
                           invert = FALSE,
                           fill_hull = FALSE,
-                          filter = 2,
+                          opening = 3,
+                          closing = FALSE,
+                          filter = FALSE,
+                          erode = FALSE,
+                          dilate = FALSE,
                           threshold = "Otsu",
                           extension = NULL,
                           tolerance = NULL,
@@ -782,6 +822,10 @@ object_export <- function(img,
                                  watershed = watershed,
                                  invert = invert,
                                  fill_hull = fill_hull,
+                                 opening = opening,
+                                 closing = closing,
+                                 erode = erode,
+                                 dilate = dilate,
                                  filter = filter,
                                  threshold = threshold,
                                  extension = extension,
@@ -856,19 +900,17 @@ object_export <- function(img,
     if(isTRUE(parallel)){
 
       init_time <- Sys.time()
-      nworkers <- trunc(detectCores()*.3)
-      cl <- parallel::makePSOCKcluster(nworkers)
-      doParallel::registerDoParallel(cl)
-      on.exit(stopCluster(cl))
+      nworkers <- trunc(parallel::detectCores()*.3)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
 
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
-      ## declare alias for dopar command
-      `%dopar%` <- foreach::`%dopar%`
 
       results <-
-        foreach::foreach(i = seq_along(plants), .packages = c("pliman")) %dopar%{
+        foreach::foreach(i = seq_along(plants)) %dofut%{
 
           tmpimg <- image_import(plants[[i]], path = diretorio_original)
 
@@ -878,6 +920,8 @@ object_export <- function(img,
                                        watershed = watershed,
                                        invert = invert,
                                        fill_hull = fill_hull,
+                                       opening = opening,
+                                       closing = closing,
                                        filter = filter,
                                        threshold = threshold,
                                        extension = extension,
@@ -936,6 +980,8 @@ object_export <- function(img,
                                      watershed = watershed,
                                      invert = invert,
                                      fill_hull = fill_hull,
+                                     opening = opening,
+                                     closing = closing,
                                      filter = filter,
                                      threshold = threshold,
                                      extension = extension,
@@ -1003,6 +1049,7 @@ object_export <- function(img,
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("soybean_touch.jpg")
 #' # segment the objects using the "B" (blue) band (default)
@@ -1010,6 +1057,7 @@ object_export <- function(img,
 #' labs <- object_label(img, watershed = TRUE)
 #' rgb <- object_rgb(img, labs[[1]])
 #' head(rgb)
+#' }
 object_rgb <- function(img, labels){
   dd <- help_get_rgb(img[,,1], img[,,2], img[,,3], labels)
   df2 <- data.frame(do.call(rbind,  lapply(dd, function(x){
@@ -1044,10 +1092,12 @@ object_rgb <- function(img, labels){
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("la_leaves.jpg")
 #' img2 <- object_to_color(img, index = "G-R")
 #' image_combine(img, img2)
+#' }
 #'
 object_to_color <- function(img,
                             index = "NB",

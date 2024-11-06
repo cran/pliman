@@ -62,7 +62,7 @@
 #' @importFrom stats as.formula
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("objects_300dpi.jpg")
 #' plot(img)
@@ -227,7 +227,6 @@ get_measures <- function(object,
 
   if("img" %in% names(res)){
     if(!inherits(object, "plm_disease_byl") & !inherits(object, "anal_obj")){
-
       # bind object_index, if it exists
       if(!is.null(object$object_index)){
         if(ncol(object$object_index) < 4){
@@ -268,7 +267,7 @@ get_measures <- function(object,
                 })
         )
       names(smr) <- c("n", "area_sum", "area_mean", "area_sd",  names(res[6:ncol(res)]))
-      smr$img <- paste0("img", unique(res$img))
+      smr$img <- object$count$Image
       smr <- smr[,c(ncol(smr), 1:ncol(smr)-1)]
       smr$area_sd[is.na(smr$area_sd)] <- 0
       merg <- smr
@@ -630,9 +629,11 @@ plot_measures <- function(object,
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' img <- image_pliman("flax_leaves.jpg")
 #' res <- analyze_objects(img, watershed = FALSE, show_contour = FALSE)
 #' plot_lw(res)
+#' }
 plot_lw <- function(object,
                     col_length = "red",
                     col_width = "green",
@@ -717,12 +718,14 @@ plot_lw <- function(object,
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' soy <- image_pliman("soy_green.jpg")
 #' anal <- analyze_objects(soy, object_index = "G", pixel_level_index = TRUE)
 #' plot_measures(anal, measure = "G")
 #'
 #' summary_index(anal, index = "G", cut_point = 0.5)
+#' }
 summary_index <- function(object,
                           index = NULL,
                           cut_point = NULL,
@@ -895,7 +898,7 @@ compute_measures <- function(mask,
                              haralick =  FALSE,
                              har_nbins = 32,
                              har_scales = 1,
-                             har_band = 1){
+                             har_band = "GRAY"){
   ocont <- EBImage::ocontour(mask)
   shape <-
     cbind(features_moment(ocont),
@@ -968,18 +971,69 @@ compute_measures <- function(mask,
                      "coverage")]
   colnames(shape) <- names_measures()
   if(isTRUE(haralick)){
-    hal <- data.frame(
-      EBImage::computeFeatures.haralick(mask,
-                                        img[,,har_band],
-                                        haralick.nbins = har_nbins,
-                                        haralick.scales = har_scales)
-    )
+    if(har_band == "GRAY"){
+      hal <- data.frame(
+        EBImage::computeFeatures.haralick(mask,
+                                          0.299 * img[,,1] + 0.587 * img[,,2] + 0.114 * img[,,3] ,
+                                          haralick.nbins = har_nbins,
+                                          haralick.scales = har_scales)
+      )
+    } else{
+      hal <- data.frame(
+        EBImage::computeFeatures.haralick(mask,
+                                          img[,,har_band],
+                                          haralick.nbins = har_nbins,
+                                          haralick.scales = har_scales)
+      )
+    }
+
     shape <- cbind(shape, hal[valid, ])
     colnames(shape) <- c(names_measures(), har_names())
   }
   invisible(list(shape = shape,
-              cont = ocont,
-              ch = ch))
+                 cont = ocont,
+                 ch = ch))
+}
+
+## helper function to compute the measures based on a mask
+compute_measures_minimal <- function(mask){
+  ocont <- EBImage::ocontour(mask)
+  shape <- cbind(features_moment(ocont), cbind(area = get_area_mask(mask)))
+  valid <- which(shape$mx != "NaN")
+  shape <- shape[valid, ]
+  ocont <- ocont[valid]
+  names(ocont) <- valid
+  lw <- help_lw(ocont)
+  shape <- transform(shape,
+                     id = as.numeric(valid),
+                     length = lw[, 1],
+                     width = lw[, 2],
+                     asp_ratio = lw[, 1] / lw[, 2],
+                     circularity_norm = poly_circularity_norm(ocont))
+  shape <- shape[, c("id",
+                     "mx",
+                     "my",
+                     "area",
+                     "maj_axis",
+                     "min_axis",
+                     "length",
+                     "width",
+                     "eccentricity",
+                     "circularity_norm",
+                     "asp_ratio")]
+  colnames(shape) <- c("id",
+                       "x",
+                       "y",
+                       "area",
+                       "major_axis",
+                       "minor_axis",
+                       "length",
+                       "width",
+                       "eccentricity",
+                       "circularity_norm",
+                       "asp_ratio")
+  invisible(list(shape = shape,
+                 cont = ocont))
 }
 
 ## helper function to compute the measures based on a mask
@@ -1019,7 +1073,7 @@ compute_measures_disease <- function(mask){
                      "length",
                      "width")]
   invisible(list(shape = shape,
-              cont = ocont))
+                 cont = ocont))
 }
 
 

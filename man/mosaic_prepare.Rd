@@ -11,7 +11,7 @@ mosaic_prepare(
   b = 1,
   re = 4,
   nir = 5,
-  crop_mosaic = FALSE,
+  crop_mosaic = TRUE,
   align = TRUE,
   crop_aligned = TRUE,
   rescale = TRUE,
@@ -26,15 +26,11 @@ mosaic_prepare(
 \item{mosaic}{A mosaic of class \code{SpatRaster}, generally imported with
 \code{\link[=mosaic_input]{mosaic_input()}}.}
 
-\item{r}{The layer for the Red band (default: 3).}
-
-\item{g}{The layer for the Green band (default: 2).}
-
-\item{b}{The layer for the Blue band (default: 1).}
-
-\item{re}{The layer for the Red-edge band (default: 4).}
-
-\item{nir}{The layer for the Near-infrared band(default: 5).}
+\item{r, g, b, re, nir}{The red, green, blue, red-edge, and  near-infrared bands
+of the image, respectively. By default, the function assumes a BGR as input
+(b = 1, g = 2, r = 3). If a multispectral image is provided up to seven
+bands can be used to compute built-in indexes. There are no limitation of
+band numbers if the index is computed using the band name.}
 
 \item{crop_mosaic}{Logical, whether to crop the mosaic interactively before
 aligning it (default: FALSE).}
@@ -79,7 +75,7 @@ The resulting object is an object of class \code{Image} that can be further
 analyzed.
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 mosaic <- mosaic_input(system.file("ex/elev.tif", package="terra"))
 mosaic_prepare(mosaic)

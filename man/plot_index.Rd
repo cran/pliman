@@ -12,10 +12,10 @@ plot_index(
   viewer = get_pliman_viewer(),
   all_layers = TRUE,
   layer = 1,
-  max_pixels = 5e+05,
+  max_pixels = 1e+06,
   downsample = NULL,
   downsample_fun = NULL,
-  color_regions = custom_palette(),
+  color_regions = custom_palette(n = 100),
   ncol = NULL,
   nrow = NULL,
   aspect_ratio = NA
@@ -26,8 +26,8 @@ plot_index(
 \code{\link[=image_index]{image_index()}}. If \code{object} is provided, then the input image is obtained
 internally.}
 
-\item{object}{An object computed with \code{\link[=analyze_objects_shp]{analyze_objects_shp()}}. By using this
-object you can ignore \code{img}.}
+\item{object}{An object computed with \code{\link[=analyze_objects]{analyze_objects()}} using the argument
+\code{return_mask = TRUE}.}
 
 \item{index}{The index to plot. Defaults to the index computed from the
 \code{object} if provided. Otherwise, the \code{B} index is computed. See
@@ -80,11 +80,11 @@ None
 Plot an image index
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 # Example usage:
 library(pliman)
 img <- image_pliman("sev_leaf.jpg")
-plot_index(img, index = "B")
+plot_index(img, index = c("R", "G"))
 }
 
 }

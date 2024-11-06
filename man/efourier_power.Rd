@@ -32,7 +32,7 @@ A list with the objects:
 \itemize{
 \item \code{cum_power}, a \code{data.frame} object with the accumulated power depending on
 the number of harmonics
-\item 
+\item \code{min_harm} The minimum number of harmonics to achieve a given power.
 }
 }
 \description{
@@ -57,8 +57,10 @@ allow groups to be distinguished (Claude, 2008).
 Adapted from Claude (2008). pp. 229.
 }
 \examples{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 pw <- efourier(contours) |> efourier_power()
+}
 
 }
 \references{

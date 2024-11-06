@@ -40,6 +40,7 @@
 #' features for each object based on a gray-level co-occurrence matrix (Haralick
 #' et al. 1979). See more details in [analyze_objects()].
 #'
+#' @inheritParams image_binary
 #' @param img The image to be analyzed.
 #' @param img_healthy A color palette of healthy tissues.
 #' @param img_symptoms A color palette of lesioned tissues.
@@ -54,11 +55,6 @@
 #'   matches the pattern (e.g., img1.-, image1.-, im2.-) will be analyzed.
 #'   Providing any number as pattern (e.g., `pattern = "1"`) will select
 #'   images that are named as 1.-, 2.-, and so on.
-#' @param filter Performs median filtering in the binary image that segments the
-#'   leaf from background? By default, a median filter of `size = 10` is applied.
-#'   This is useful to reduce the noise and segment the leaf and background more
-#'   accurately. See more at [image_filter()]. Set to `FALSE` to cancel median
-#'   filtering.
 #' @param parallel Processes the images asynchronously (in parallel) in separate
 #'   R sessions running in the background on the same machine. It may speed up
 #'   the processing time, especially when `pattern` is used is informed. The
@@ -91,6 +87,10 @@
 #'   `index_dh`, respectively.
 #' @param invert Inverts the binary image if desired. This is useful to process
 #'   images with black background. Defaults to `FALSE`.
+#'@param lower_noise By default, lesions with lesser than 10% of the mean area
+#'  of all lesions are removed (`lower_noise = 0.1`). Increasing this value will
+#'  remove larger lesions. To define an explicit lower or upper size (in pixel
+#'  unit), use the `lower_size` and `upper_size` arguments.
 #' @param lower_size Lower limit for size for the image analysis. Leaf images
 #'   often contain dirt and dust. To prevent dust from affecting the image
 #'   analysis, the lower limit of analyzed size is set to 0.1, i.e., objects
@@ -194,7 +194,7 @@
 #' @md
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("sev_leaf_nb.jpg")
 #' healthy <- image_pliman("sev_healthy.jpg")
@@ -217,7 +217,11 @@ measure_disease <- function(img,
                             img_symptoms = NULL,
                             img_background = NULL,
                             pattern = NULL,
-                            filter = 10,
+                            opening = c(10, 0),
+                            closing = c(0, 0),
+                            filter = c(0, 0),
+                            erode = c(0,0),
+                            dilate = c(0, 0),
                             parallel = FALSE,
                             workers = NULL,
                             resize = FALSE,
@@ -227,6 +231,7 @@ measure_disease <- function(img,
                             has_white_bg = FALSE,
                             threshold = NULL,
                             invert = FALSE,
+                            lower_noise = 0.1,
                             lower_size = NULL,
                             upper_size = NULL,
                             topn_lower = NULL,
@@ -257,7 +262,7 @@ measure_disease <- function(img,
                             dir_original = NULL,
                             dir_processed = NULL,
                             verbose = TRUE){
-  # check_ebi()
+  check_ebi()
   if(!missing(img) & !missing(pattern)){
     stop("Only one of `img` or `pattern` arguments can be used.", call. = FALSE)
   }
@@ -451,10 +456,24 @@ measure_disease <- function(img,
                                           data = fundo_resto))
           pred1 <- round(predict(modelo1, newdata = original, type="response"), 0)
           ifelse(fill_hull == TRUE,
-                 plant_background <- EBImage::fillHull(matrix(pred1, ncol = ncol_img)),
-                 plant_background <- matrix(pred1, ncol = ncol_img))
-          if(is.numeric(filter) & filter > 1){
-            plant_background <- EBImage::medianFilter(plant_background, size = filter)
+                 plant_background <- EBImage::Image(EBImage::fillHull(matrix(pred1, ncol = ncol_img))),
+                 plant_background <- EBImage::Image(matrix(pred1, ncol = ncol_img)))
+          # return(plant_background)
+          # print(plant_background)
+          if(is.numeric(opening[[1]]) & opening[[1]] > 0){
+            plant_background <- image_opening(plant_background, size = opening[[1]])
+          }
+          if(is.numeric(closing[[1]]) & closing[[1]] > 0){
+            plant_background <- image_closing(plant_background, size = closing[[1]])
+          }
+          if(is.numeric(filter[[1]]) & filter[[1]] > 1){
+            plant_background <- EBImage::medianFilter(plant_background, size = filter[[1]])
+          }
+          if(is.numeric(erode[[1]]) & erode[[1]] > 1){
+            plant_background <- image_erode(plant_background, erode[[1]])
+          }
+          if(is.numeric(dilate[[1]]) & dilate[[1]] > 1){
+            plant_background <- image_dilate(plant_background, dilate[[1]])
           }
           plant_background[plant_background == 1] <- 2
           sadio_sintoma <-
@@ -484,6 +503,21 @@ measure_disease <- function(img,
           tol <- ifelse(is.null(tolerance), parms2[rowid, 4], tolerance)
           if(isTRUE(fill_hull)){
             leaf_sympts <- EBImage::fillHull(leaf_sympts)
+          }
+          if(is.numeric(opening[[2]]) & opening[[2]] > 0){
+            leaf_sympts <- image_opening(leaf_sympts, size = opening[[2]])
+          }
+          if(is.numeric(closing[[2]]) & closing[[2]] > 0){
+            leaf_sympts <- image_closing(leaf_sympts, size = closing[[2]])
+          }
+          if(is.numeric(filter[[2]]) & filter[[2]] > 1){
+            leaf_sympts <- EBImage::medianFilter(leaf_sympts, size = filter[[2]])
+          }
+          if(is.numeric(erode[[2]]) & erode[[2]] > 1){
+            leaf_sympts <- image_erode(leaf_sympts, erode[[1]])
+          }
+          if(is.numeric(dilate[[2]]) & dilate[[2]] > 1){
+            leaf_sympts <- image_dilate(leaf_sympts, dilate[[1]])
           }
           ifelse(watershed == FALSE,
                  nmask <- EBImage::bwlabel(leaf_sympts),
@@ -565,7 +599,12 @@ measure_disease <- function(img,
                               index = index_lb,
                               threshold = my_thresh,
                               invert = invert1,
-                              filter = filter)
+                              fill_hull = fill_hull,
+                              opening = opening[[1]],
+                              closing = closing[[1]],
+                              filter = filter[[1]],
+                              erode = erode[[1]],
+                              dilate = dilate[[1]])
 
           img <- seg
         }
@@ -585,10 +624,15 @@ measure_disease <- function(img,
         }
         img2 <- help_binary(img,
                             index = index_dh,
+                            opening = opening[[2]],
+                            closing = closing[[2]],
+                            filter = filter[[2]],
+                            erode = erode[[2]],
+                            dilate = dilate[[2]],
                             threshold = my_thresh2,
                             invert = invert2,
                             has_white_bg = has_white_bg,
-                            resize = FALSE)
+                            resize = resize)
         img2@.Data[is.na(img2@.Data)] <- FALSE
         # which(is.na(img2@.Data))
         res <- length(img2)
@@ -681,7 +725,7 @@ measure_disease <- function(img,
         shape <- shape$shape
         ifelse(!is.null(lower_size),
                shape <- shape[shape$area > lower_size, ],
-               shape <- shape[shape$area > mean(shape$area) * 0.1, ])
+               shape <- shape[shape$area > mean(shape$area) * lower_noise, ])
         if(!is.null(upper_size)){
           shape <- shape[shape$area < upper_size, ]
         }
@@ -721,7 +765,12 @@ measure_disease <- function(img,
       }
       if(isTRUE(show_contour) & show_original == TRUE){
         ocont <- EBImage::ocontour(nmask)
+        # correct the contour
+        ocont <- lapply(ocont, function(x){
+          x + 1
+        })
       }
+
       if(plot == TRUE){
         if(marker != "point"){
           plot(im2)
@@ -817,26 +866,23 @@ measure_disease <- function(img,
     }
     if(parallel == TRUE){
       init_time <- Sys.time()
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.3), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust,
-                    varlist = c("names_plant", "help_count"),
-                    envir=environment())
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.3), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
+
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
       results <-
-        parLapply(clust, names_plant,
-                  function(x){
-                    help_count(x,
-                               img_healthy, img_symptoms, img_background, resize, fill_hull, invert,
-                               index_lb, index_dh, has_white_bg, lesion_size, tolerance, extension, randomize,
-                               nsample, plot, show_original, show_background, col_leaf,
-                               col_lesions, col_background,  save_image, dir_original, dir_processed,
-                               marker, marker_col, marker_size)
-                  })
-
+      foreach::foreach(i = seq_along(names_plant)) %dofut%{
+        help_count(names_plant[i],
+                   img_healthy, img_symptoms, img_background, resize, fill_hull, invert,
+                   index_lb, index_dh, has_white_bg, lesion_size, tolerance, extension, randomize,
+                   nsample, plot, show_original, show_background, col_leaf,
+                   col_lesions, col_background,  save_image, dir_original, dir_processed,
+                   marker, marker_col, marker_size)
+      }
     } else{
       init_time <- Sys.time()
       results <- list()
@@ -912,6 +958,11 @@ measure_disease_iter <- function(img,
                                  has_background = TRUE,
                                  r = 2,
                                  viewer = get_pliman_viewer(),
+                                 opening = c(10, 0),
+                                 closing = c(0, 0),
+                                 filter = c(0, 0),
+                                 erode = c(0, 0),
+                                 dilate = c(0, 0),
                                  show = "rgb",
                                  index = "NGRDI",
                                  ...){
@@ -937,7 +988,7 @@ measure_disease_iter <- function(img,
                          title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
                          col = "blue")
     if(viewopt != "base"){
-      image_view(img[1:10,1:10,])
+      image_view(img[1:10,1:10,], edit = TRUE)
     }
   } else{
     back <- NULL
@@ -957,7 +1008,7 @@ measure_disease_iter <- function(img,
                        title = "Use the first mouse button to pick up LEAF colors. Click 'Done' to finish",
                        col = "black")
   if(viewopt != "base"){
-    image_view(img[1:10,1:10,])
+    image_view(img[1:10,1:10,], edit = TRUE)
   }
 
   # Call pick_disease function

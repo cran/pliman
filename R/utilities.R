@@ -18,7 +18,7 @@
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @export
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' iris2 <- iris |> rownames_to_column()
 #' head(iris2)
@@ -461,13 +461,13 @@ progress <- function(min = 0,
                      time = Sys.time()){
   # Adapted from https://stackoverflow.com/a/26920123/15245107
   invisible(list(min = min,
-              max = max,
-              leftd = leftd,
-              rightd = rightd,
-              char = char,
-              style = style,
-              width = width,
-              time = time))
+                 max = max,
+                 leftd = leftd,
+                 rightd = rightd,
+                 char = char,
+                 style = style,
+                 width = width,
+                 time = time))
 }
 run_progress <- function(pb,
                          actual,
@@ -505,26 +505,35 @@ check_names_dir <- function(name, names_dir, dir){
   }
 }
 
-check_ebi <- function(){
-  if(!requireNamespace("EBImage", quietly = TRUE)) {
-    if(interactive() == TRUE){
-      inst <-
-        switch(menu(c("Yes", "No"), title = "Package {EBImage} required but not installed.\nDo you want to install it now?"),
-               "yes", "no")
-      if(inst == "yes"){
-        if(!requireNamespace("BiocManager", quietly = TRUE)) {
+check_ebi <- function() {
+  if (!requireNamespace("EBImage", quietly = TRUE)) {
+    if (interactive()) {
+      inst <- switch(menu(c("Yes", "No"),
+                          title = "Package {EBImage} is required but not installed.\nDo you want to install it now?"),
+                     "yes", "no")
+      if (inst == "yes") {
+        if (!requireNamespace("BiocManager", quietly = TRUE)) {
           install.packages("BiocManager", quiet = TRUE)
         }
-        BiocManager::install("EBImage",
-                             update = FALSE,
-                             ask = FALSE,
-                             quiet = TRUE)
-      } else{
-        message("To use {pliman}, first install {EBImage} following the directions at 'https://bioconductor.org/packages/EBImage'")
+        BiocManager::install("EBImage", update = FALSE, ask = FALSE, quiet = TRUE)
+        if (!requireNamespace("EBImage", quietly = TRUE)) {
+          message("Installation of {EBImage} failed. Please install it manually.")
+          return(FALSE)
+        }
+      } else {
+        message("To use {pliman}, please install {EBImage} following the directions at 'https://bioconductor.org/packages/EBImage'")
+        return(FALSE)
       }
+    } else {
+      message("Package {EBImage} is required. Please install it following the directions at 'https://bioconductor.org/packages/EBImage'")
+      return(FALSE)
     }
   }
+  return(TRUE)
 }
+
+
+
 # correct coordinates in analyze_objects_shp()
 correct_coords <- function(coords, nrowimg, ncolimg, nrow, ncol){
   get_row_number <- function(vector, rows, cols) {
@@ -622,7 +631,7 @@ separate_col <- function(.data, col, into, sep = "[^[:alnum:]]+"){
   df <- strsplit(.data[[var]], split = sep)
   df <-
     do.call(rbind,
-            lapply(df, function(x)x)) %>%
+            lapply(df, function(x)x)) |>
     as.data.frame()
   .data[[var]] <- NULL
   names(df) <- into
@@ -691,7 +700,7 @@ ggplot_color <- function(n = 1){
 #' @name utils_wd
 #' @examples
 #'
-#' \dontrun{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' get_wd_here()
 #' set_wd_here()
 #' open_wd_here()
@@ -790,4 +799,65 @@ open_wd <- function(path = getwd()){
 }
 
 
+parse_formula <- function(formula, valid_indices) {
+  eval(parse(text = sprintf("function(%s) %s", paste0(toupper(names(valid_indices)), collapse = ", "), formula)))
+}
+compute_outsize <- function(pct) {
+  if (length(pct) == 1) {
+    pct <- rep(pct, 2)
+  }
+  outsize <- NULL
+  for (i in seq_along(pct)) {
+    outsize[i] <- paste0(pct[[i]], "%")
+  }
+  return(outsize)
+}
 
+add_missing_columns <- function(data) {
+  if(inherits(data, "data.frame")){
+    data <- data %>%
+      mutate(
+        unique_id = if (!"unique_id" %in% names(data)) dplyr::row_number() else unique_id,
+        block = if (!"block" %in% names(data)) "B01" else block,
+        plot_id = if (!"plot_id" %in% names(data)) paste0("P", leading_zeros(unique_id, 4)) else plot_id,
+        row = if (!"row" %in% names(data)) 1 else row,
+        column = if (!"column" %in% names(data)) 1 else column,
+        .before = 1
+      )
+  }
+  return(data)
+}
+
+check_and_install_package <- function(pkg, reason = NULL) {
+  # Reason is optional and can describe why the package is needed
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+
+    # Construct the message for the package requirement
+    package_message <- paste0("Package {", pkg, "} is required", if (!is.null(reason)) paste0(" to ", reason), " but is not available.")
+
+    if (interactive()) {
+      # Interactive mode: ask the user if they want to install the package
+      inst <- menu(
+        choices = c("Yes", "No"),
+        title = paste0(package_message, "\nDo you want to install it now?")
+      )
+
+      if (inst == 1) {  # If the user selects "Yes"
+        message("Installing '", pkg, "' package...")
+        install.packages(pkg, quiet = TRUE)
+
+        if (requireNamespace(pkg, quietly = TRUE)) {
+          message("Package '", pkg, "' successfully installed.")
+        } else {
+          stop("Package '", pkg, "' installation failed. Please try again.")
+        }
+      } else {
+        message("You chose not to install '", pkg, "'. The feature depending on this package will not be available.")
+      }
+
+    } else {
+      # Non-interactive mode: stop with an error message
+      stop(package_message, " Please install it manually: install.packages('", pkg, "')")
+    }
+  }
+}

@@ -5,9 +5,16 @@
 \alias{mosaic_export}
 \title{Create and Export mosaics}
 \usage{
-mosaic_input(mosaic, ...)
+mosaic_input(
+  mosaic,
+  mosaic_pattern = NULL,
+  info = TRUE,
+  check_16bits = FALSE,
+  check_datatype = FALSE,
+  ...
+)
 
-mosaic_export(mosaic, filename, overwrite = FALSE, ...)
+mosaic_export(mosaic, filename, datatype = NULL, overwrite = FALSE, ...)
 }
 \arguments{
 \item{mosaic}{\itemize{
@@ -16,10 +23,24 @@ array or a list of \code{SpatRaster} objects.
 \item For \code{mosaic_export()}, an \code{SpatRaster} object.
 }}
 
+\item{mosaic_pattern}{A pattern name to import multiple mosaics into a list.}
+
+\item{info}{Print the mosaic informations (eg., CRS, extend). Defaults to \code{TRUE}}
+
+\item{check_16bits}{Checks if mosaic has maximum value in the 16-bits format
+(65535), and replaces it by NA. Defaults to \code{FALSE}.}
+
+\item{check_datatype}{Logical. If \code{TRUE}, checks and suggests the
+appropriate data type based on the raster values.}
+
 \item{...}{Additional arguments passed to \code{\link[terra:rast]{terra::rast()}} (\code{mosaic_input()})
 or  \code{\link[terra:writeRaster]{terra::writeRaster()}} (\code{mosaic_output()})}
 
 \item{filename}{character. The Output filename.}
+
+\item{datatype}{The datatype. By default, the function will try to guess the
+data type that saves more memory usage and file size. See
+\code{\link[terra:writeRaster]{terra::writeRaster()}} and \code{\link[terra:datatype]{terra::datatype()}} for more details.}
 
 \item{overwrite}{logical. If \code{TRUE}, filename is overwritten.}
 }
@@ -41,16 +62,18 @@ a \code{SpatRaster} object to a file.
 }
 }
 \examples{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 
 # create an SpatRaster object based on a matrix
-x <- matrix(1:20, nrow = 4, ncol = 5)
+x <- system.file("ex/logo.tif", package="terra")
 rast <- mosaic_input(x)
-mosaic_view(rast, viewer = "base", axes = TRUE)
+mosaic_plot(rast)
 
 # create a temporary filename for the example
 f <- file.path(tempdir(), "test.tif")
 mosaic_export(rast, f, overwrite=TRUE)
 list.files(tempdir())
+}
 
 }

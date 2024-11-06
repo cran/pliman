@@ -95,7 +95,8 @@
 #'  repeated every two pixels or 10 pixels. By default, the Haralick features
 #'  are computed with the R band. To chance this default, use the argument
 #'  `har_band`. For example, `har_band = 2` will compute the features with the
-#'  green band.
+#'  green band. Additionaly, har_band = "GRAY" can be used. In this case, a
+#'  grayscale (0.299 * R + 0.587 * G + 0.114 * B) is used.
 #'
 #'   - If `efourier = TRUE` is used, an Elliptical Fourier Analysis (Kuhl and
 #'  Giardina, 1982) is computed for each object contour using [efourier()].
@@ -126,6 +127,20 @@
 #'  respectively (optional). If a chacarceter is used (eg., `foreground =
 #'  "fore"`), the function will search in the current working directory a valid
 #'  image named "fore".
+#' @param opening,closing,filter,erode,dilate **Morphological operations (brush size)**
+#'  * `dilate` puts the mask over every background pixel, and sets it to
+#'  foreground if any of the pixels covered by the mask is from the foreground.
+#'  * `erode` puts the mask over every foreground pixel, and sets it to
+#'  background if any of the pixels covered by the mask is from the background.
+#'  * `opening` performs an erosion followed by a dilation. This helps to
+#'   remove small objects while preserving the shape and size of larger objects.
+#'  * `closing` performs a dilatation followed by an erosion. This helps to
+#'   fill small holes while preserving the shape and size of larger objects.
+#'  * `filter` performs median filtering in the binary image. Provide a positive
+#'  integer > 1 to indicate the size of the median filtering. Higher values are
+#'  more efficient to remove noise in the background but can dramatically impact
+#'  the perimeter of objects, mainly for irregular perimeters such as leaves
+#'  with serrated edges.
 #' @param pick_palettes  Logical argument indicating wheater the user needs to
 #'   pick up the color palettes for foreground and background for the image. If
 #'   `TRUE` [pick_palette()] will be called internally so that the user can sample
@@ -215,7 +230,7 @@
 #'@param har_scales A integer vector indicating the number of scales to use to
 #'  compute the Haralick features. See Details.
 #'@param har_band The band to compute the Haralick features (1 = R, 2 = G, 3 =
-#'  B). Defaults to 1.
+#'  B). Defaults to 1. Other allowed value is `har_band = "GRAY"`.
 #' @param pcv Computes the Perimeter Complexity Value? Defaults to `FALSE`.
 #' @param pcv_niter An integer specifying the number of smoothing iterations for
 #'   computing the  Perimeter Complexity Value. Defaults to 100.
@@ -230,10 +245,6 @@
 #'  the background. IMPORTANT: Objects touching each other can be combined into
 #'  one single object, which may underestimate the number of objects in an
 #'  image.
-#'@param filter Performs median filtering in the binary image? See more at
-#'  [image_filter()]. Defaults to `FALSE`. Use a positive integer to define the
-#'  size of the median filtering. Larger values are effective at removing noise,
-#'  but adversely affect edges.
 #'@param invert Inverts the binary image if desired. This is useful to process
 #'  images with a black background. Defaults to `FALSE`. If `reference = TRUE`
 #'  is use, `invert` can be declared as a logical vector of length 2 (eg.,
@@ -279,7 +290,7 @@
 #'@param lower_size,upper_size Lower and upper limits for size for the image
 #'  analysis. Plant images often contain dirt and dust.  Upper limit is set to
 #'  `NULL`, i.e., no upper limit used. One can set a known area or use
-#'  `lower_limit = 0` to select all objects (not advised). Objects that matches
+#'  `lower_size = 0` to select all objects (not advised). Objects that matches
 #'  the size of a given range of sizes can be selected by setting up the two
 #'  arguments. For example, if `lower_size = 120` and `upper_size = 140`,
 #'  objects with size greater than or equal 120 and less than or equal 140 will
@@ -502,7 +513,7 @@
 #' @md
 #' @author Tiago Olivoto \email{tiagoolivoto@@gmail.com}
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("soybean_touch.jpg")
 #' obj <- analyze_objects(img)
@@ -519,7 +530,8 @@
 #'
 #'
 #' #' ########################### Example 1 #########################
-#' # Correct the measures based on the area of the largest object
+#' # Correct the measures based on the area of the largest ob
+#' ject
 #' # note that since the reference object
 #'
 #' img <- image_pliman("flax_grains.jpg")
@@ -565,6 +577,10 @@ analyze_objects <- function(img,
                             resize = FALSE,
                             trim = FALSE,
                             fill_hull = FALSE,
+                            erode = FALSE,
+                            dilate = FALSE,
+                            opening = FALSE,
+                            closing = FALSE,
                             filter = FALSE,
                             invert = FALSE,
                             object_size = "medium",
@@ -614,6 +630,7 @@ analyze_objects <- function(img,
                             dir_original = NULL,
                             dir_processed = NULL,
                             verbose = TRUE){
+  check_ebi()
   lower_noise <- ifelse(isTRUE(reference_larger), lower_noise * 3, lower_noise)
   if(!object_size %in% c("small", "medium", "large", "elarge")){
     stop("'object_size' must be one of 'small', 'medium', 'large', or 'elarge'")
@@ -638,7 +655,7 @@ analyze_objects <- function(img,
              paste0("./", dir_processed))
   }
   help_count <-
-    function(img, foreground, background, pick_palettes, resize, fill_hull, threshold, filter,
+    function(img, foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate, opening, closing, filter,
              tolerance, extension, randomize, nrows, plot, show_original,
              show_background, marker, marker_col, marker_size, save_image,
              prefix, dir_original, dir_processed, verbose, col_background,
@@ -688,7 +705,7 @@ analyze_objects <- function(img,
                                        title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
                                        viewer = viewer)
             if(viewopt != "base"){
-              image_view(img[1:10, 1:10,])
+              image_view(img[1:10, 1:10,], edit = TRUE)
             }
             if(viewopt == "base"){
               message("Use the first mouse button to pick up FOREGROUND colors. Press Est to exit")
@@ -782,6 +799,10 @@ analyze_objects <- function(img,
                                 threshold = threshold,
                                 k = k,
                                 windowsize = windowsize,
+                                erode = erode,
+                                dilate = dilate,
+                                opening = opening,
+                                closing = closing,
                                 filter = filter,
                                 resize = FALSE)
             if(isTRUE(watershed)){
@@ -837,6 +858,10 @@ analyze_objects <- function(img,
             help_binary(img,
                         threshold = threshold,
                         index = back_fore_index,
+                        erode = erode,
+                        dilate = dilate,
+                        opening = opening,
+                        closing = closing,
                         filter = filter,
                         r = r,
                         g = g,
@@ -868,6 +893,10 @@ analyze_objects <- function(img,
                         b = b,
                         re = re,
                         nir = nir,
+                        erode = erode,
+                        dilate = dilate,
+                        opening = opening,
+                        closing = closing,
                         filter = filter,
                         k = k,
                         windowsize = windowsize,
@@ -919,25 +948,41 @@ analyze_objects <- function(img,
         } else{
           # correct the measures based on larger or smaller objects
 
-          if(!is.null(foreground) && !is.null(background) | isTRUE(pick_palettes)){
+          if((!is.null(foreground) && !is.null(background)) | isTRUE(pick_palettes)){
 
             if(isTRUE(pick_palettes)){
+              viewopt <- c("base", "mapview")
+              viewopt <- viewopt[pmatch(viewer[[1]], viewopt)]
+
               if(interactive()){
-                plot(img)
-                message("Use the first mouse button to pick up BACKGROUND colors. Press Est to exit")
+                if(viewopt == "base"){
+                  plot(img)
+                }
+                if(viewopt == "base"){
+                  message("Use the first mouse button to pick up BACKGROUND colors. Press Est to exit")
+                }
                 background <- pick_palette(img,
                                            r = 5,
                                            verbose = FALSE,
                                            palette  = FALSE,
                                            plot = FALSE,
-                                           col = "blue")
-                message("Use the first mouse button to pick up FOREGROUND colors. Press Est to exit")
+                                           col = "blue",
+                                           title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
+                                           viewer = viewer)
+                if(viewopt != "base"){
+                  image_view(img[1:10, 1:10,], edit = TRUE)
+                }
+                if(viewopt == "base"){
+                  message("Use the first mouse button to pick up FOREGROUND colors. Press Est to exit")
+                }
                 foreground <- pick_palette(img,
                                            r = 5,
                                            verbose = FALSE,
                                            palette  = FALSE,
                                            plot = FALSE,
-                                           col = "salmon")
+                                           col = "salmon",
+                                           title = "Use the first mouse button to pick up FOREGROUND colors. Click 'Done' to finish",
+                                           viewer = viewer)
               }
             }
 
@@ -1019,6 +1064,10 @@ analyze_objects <- function(img,
                           nir = nir,
                           k = k,
                           windowsize = windowsize,
+                          erode = erode,
+                          dilate = dilate,
+                          opening = opening,
+                          closing = closing,
                           filter = filter,
                           invert = invert,
                           fill_hull = fill_hull)
@@ -1052,20 +1101,29 @@ analyze_objects <- function(img,
           object_contour <- shape$cont
           ch <- shape$ch
           shape <- shape$shape
-          if(isTRUE(show_lw)){
-            shape_ori <- shape
-          }
+
 
           if(isTRUE(reference_larger)){
             id_ref <- which.max(shape$area)
+            pix_ref <- which(nmask == id_ref)
+            img@.Data[,,1][pix_ref] <- 1
+            img@.Data[,,2][pix_ref] <- 0
+            img@.Data[,,3][pix_ref] <- 0
             npix_ref <- shape[id_ref, 4]
             shape <- shape[-id_ref,]
             shape <- shape[shape$area > mean(shape$area) * lower_noise, ]
           } else{
             shape <- shape[shape$area > mean(shape$area) * lower_noise, ]
             id_ref <- which.min(shape$area)
+            pix_ref <- which(nmask == id_ref)
+            img@.Data[,,1][pix_ref] <- 1
+            img@.Data[,,2][pix_ref] <- 0
+            img@.Data[,,3][pix_ref] <- 0
             npix_ref <- shape[id_ref, 4]
             shape <- shape[-id_ref,]
+          }
+          if(isTRUE(show_lw)){
+            shape_ori <- shape
           }
 
           px_side <- sqrt(reference_area / npix_ref)
@@ -1134,9 +1192,9 @@ analyze_objects <- function(img,
       # check if angles should be computed
       if(isTRUE(ab_angles)){
         angles <- poly_apex_base_angle(object_contour, ab_angles_percentiles)
-    } else{
-      angles <- NULL
-    }
+      } else{
+        angles <- NULL
+      }
 
       # check if width at should be computed
       if(isTRUE(width_at)){
@@ -1167,6 +1225,7 @@ analyze_objects <- function(img,
       }
 
       if(!is.null(object_index)){
+        object_index_used <- object_index[1]
         if(!is.character(object_index)){
           stop("`object_index` must be a character.", call. = FALSE)
         }
@@ -1181,35 +1240,23 @@ analyze_objects <- function(img,
         obj_rgb <- object_rgb(img, data_mask)
         obj_rgb <- subset(obj_rgb, id %in% shape$id)
         obj_rgb <- cbind(obj_rgb, rgb_to_hsb(obj_rgb[, 2:4]))
-        # indexes by id
-        tmp <-
-          by(obj_rgb,
-             INDICES = obj_rgb$id,
-             FUN = function(x){
-               data.frame(
-                 do.call(cbind,
-                         lapply(seq_along(ind_formula), function(i){
-                           data.frame(transform(x, index = eval(parse(text = ind_formula[i])))[,ncol(obj_rgb)+1])
-                         })
-                 )
-               )
-             }
-          )
-        tmp <-
-          do.call(rbind,
-                  lapply(tmp, data.frame)
-          )
+        # Use by to calculate indexes directly and aggregate later
+        tmp <- by(obj_rgb, obj_rgb$id, FUN = function(x) {
+          sapply(ind_formula, function(formula) eval(parse(text = formula), envir = x))
+        })
+
+        tmp <- do.call(rbind, tmp)
         colnames(tmp) <- ind_name
         obj_rgb <- cbind(obj_rgb, tmp)
-        indexes <- data.frame(cbind(id = obj_rgb$id, tmp))
-        colnames(indexes) <- c("id", ind_name)
-        indexes <- aggregate(. ~ id, indexes, mean, na.rm = TRUE)
+        indexes <- aggregate(. ~ id, obj_rgb[, c("id", ind_name)], mean, na.rm = TRUE)
+        rm(tmp)
         if(isFALSE(pixel_level_index)){
           obj_rgb <- NULL
         }
       } else{
         obj_rgb <- NULL
         indexes <- NULL
+        object_index_used <- NULL
       }
       if(isTRUE(return_mask)){
         mask <- nmask
@@ -1240,7 +1287,7 @@ analyze_objects <- function(img,
                       mask = mask,
                       pcv = pcv,
                       contours = object_contour,
-                      parms = list(index = index))
+                      parms = list(index = index, object_index = object_index_used))
       class(results) <- "anal_obj"
       if(plot == TRUE | save_image == TRUE){
         backg <- !is.null(col_background)
@@ -1309,6 +1356,11 @@ analyze_objects <- function(img,
         }
         marker_col <- ifelse(is.null(marker_col), "white", marker_col)
         marker_size <- ifelse(is.null(marker_size), 0.75, marker_size)
+        # correct the contour
+        object_contour <- lapply(object_contour, function(x){
+          x + 1
+        })
+
         if(plot == TRUE){
           if(marker != "point"){
             plot(im2)
@@ -1316,8 +1368,8 @@ analyze_objects <- function(img,
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
             }
             if(show_mark){
-              text(shape[, 2],
-                   shape[, 3],
+              text(shape[, 2] + 1,
+                   shape[, 3] + 1,
                    round(shape[, marker], 2),
                    col = marker_col,
                    cex = marker_size)
@@ -1331,8 +1383,8 @@ analyze_objects <- function(img,
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
             }
             if(show_mark){
-              points(shape[, 2],
-                     shape[, 3],
+              points(shape[, 2] + 1,
+                     shape[, 3] + 1,
                      col = marker_col,
                      pch = 16,
                      cex = marker_size)
@@ -1364,8 +1416,8 @@ analyze_objects <- function(img,
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
             }
             if(show_mark){
-              text(shape[, 2],
-                   shape[, 3],
+              text(shape[, 2] + 1,
+                   shape[, 3] + 1,
                    round(shape[, marker], 2),
                    col = marker_col,
                    cex = marker_size)
@@ -1376,8 +1428,8 @@ analyze_objects <- function(img,
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
             }
             if(show_mark){
-              points(shape[, 2],
-                     shape[, 3],
+              points(shape[, 2] + 1,
+                     shape[, 3] + 1,
                      col = marker_col,
                      pch = 16,
                      cex = marker_size)
@@ -1394,10 +1446,10 @@ analyze_objects <- function(img,
         }
       }
       invisible(results)
-}
+    }
 
   if(missing(pattern)){
-    help_count(img, foreground, background, pick_palettes, resize, fill_hull, threshold, filter,
+    help_count(img, foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate,  opening, closing, filter,
                tolerance , extension, randomize, nrows, plot, show_original,
                show_background, marker, marker_col, marker_size, save_image, prefix,
                dir_original, dir_processed, verbose, col_background,
@@ -1419,21 +1471,19 @@ analyze_objects <- function(img,
     }
     if(parallel == TRUE){
       init_time <- Sys.time()
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.3), workers)
-      cl <- parallel::makePSOCKcluster(nworkers)
-      doParallel::registerDoParallel(cl)
-      on.exit(stopCluster(cl))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.3), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
 
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
-      ## declare alias for dopar command
-      `%dopar%` <- foreach::`%dopar%`
 
       results <-
-        foreach::foreach(i = seq_along(names_plant), .packages = c("pliman", "EBImage")) %dopar%{
+        foreach::foreach(i = seq_along(names_plant)) %dofut%{
           help_count(names_plant[i],
-                     foreground, background, pick_palettes, resize, fill_hull, threshold, filter,
+                     foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate, opening, closing, filter,
                      tolerance , extension, randomize, nrows, plot, show_original,
                      show_background, marker, marker_col, marker_size, save_image, prefix,
                      dir_original, dir_processed, verbose, col_background,
@@ -1448,7 +1498,7 @@ analyze_objects <- function(img,
           run_progress(pb, ...)
         }
         help_count(img  = plants,
-                   foreground, background, pick_palettes, resize, fill_hull, threshold, filter,
+                   foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate, opening, closing, filter,
                    tolerance , extension, randomize, nrows, plot, show_original,
                    show_background, marker, marker_col, marker_size, save_image, prefix,
                    dir_original, dir_processed, verbose, col_background,
@@ -1633,8 +1683,8 @@ analyze_objects <- function(img,
       results <- results[, c(ncol(results), 1:ncol(results) - 1)]
     }
     summ <- stats[stats$stat == "n", c(1, 3)]
+    names(summ) <- c("Image", "Objects")
     if(verbose == TRUE){
-      names(summ) <- c("Image", "Objects")
       cat("--------------------------------------------\n")
       print(summ, row.names = FALSE)
       cat("--------------------------------------------\n")
@@ -1662,7 +1712,7 @@ analyze_objects <- function(img,
       )
     )
   }
-  }
+}
 
 
 #' @name analyze_objects
@@ -1676,7 +1726,7 @@ analyze_objects <- function(img,
 #' @export
 #'
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #'
 #' img <- image_pliman("soy_green.jpg")
@@ -1702,6 +1752,56 @@ plot.anal_obj <- function(x,
                           measure = "area",
                           type = c("density", "histogram"),
                           ...){
+  if(!which %in% c("measure", "index")){
+    stop("'which' must be one of 'measure' or 'index'", call. = FALSE)
+  }
+  if(which == "measure"){
+    nam <- colnames(x$results)
+    if(!measure %in% nam){
+      stop("Measure '", measure, "' not available in 'x'. Try one of the '",
+           paste0(nam, collapse = ", "), call. = FALSE)
+    }
+    temp <- x$results[[measure]]
+    types <- c("density", "histogram")
+    matches <- grepl(type[1], types)
+    type <- types[matches]
+    if(type == "histogram"){
+      hist(temp,  xlab = paste(measure), main = NA, col = "cyan")
+    } else{
+      density_data <- density(temp)  # Calculate the density for the column
+      plot(density_data, col = "red", main = NA, lwd = 2, xlab = paste(measure), ylab = "Density")  # Create the density plot
+      points(x = temp, y = rep(0, length(temp)), col = "red")
+    }
+  } else{
+    rgb <- x$object_rgb
+    if(is.null(rgb)){
+      stop("RGB values not found. Use `object_index` in the function `analyze_objects()`.\nHave you accidentally missed the argument `pixel_level_index = TRUE`?", call. = FALSE)
+    }
+    plot(density(rgb$R),
+         main = NA,
+         col = "red",
+         lwd = 2,
+         xlim = c(min(rgb$R, rgb$G, rgb$B), max(rgb$R, rgb$G, rgb$B)),
+         ylim = c(0, max(density(rgb$R)$y, density(rgb$G)$y, density(rgb$B)$y)),
+         xlab = "Pixel value",
+         ylab = "Density")
+
+    # Add the density curves for G and B
+    lines(density(rgb$G), col = "green", lwd = 2)
+    lines(density(rgb$B), col = "blue", lwd = 2)
+    # Add a legend
+    legend("topright", legend = c("R", "G", "B"), col = c("red", "green", "blue"), lty = 1,
+           lwd = 2)
+
+  }
+}
+#' @name analyze_objects
+#' @export
+plot.anal_obj_ls <- function(x,
+                             which = "measure",
+                             measure = "area",
+                             type = c("density", "histogram"),
+                             ...){
   if(!which %in% c("measure", "index")){
     stop("'which' must be one of 'measure' or 'index'", call. = FALSE)
   }

@@ -28,8 +28,14 @@
 #' alignment to the y-axis (with poly_align()). The length is defined as the
 #' range along the x-axis, and the width is defined as the range on the y-axis.
 #'
-#'    - `poly_mass()` Computes the center of mass of a polygon given by the
-#' vertices in the vectors in `x`.
+#' - `poly_mass()` Computes the center of mass (centroid) of a polygon given by
+#' the vertices in the vectors x and y using the following formulas:
+#'
+#' \deqn{C_x = \frac{1}{6A} \sum_{i=1}^{n} (x_i + x_{i+1}) (x_i y_{i+1} - x_{i+1} y_i)}
+#' \deqn{C_y = \frac{1}{6A} \sum_{i=1}^{n} (y_i + y_{i+1}) (x_i y_{i+1} - x_{i+1} y_i)} where `C_x` and `C_y` are the coordinates of the center of mass, `A` is the
+#' area of the polygon computed by the Shoelace formula, `x` and `y` are the
+#' coordinates that form the corners of the polygon, and `n` is the number of
+#' coordinates.
 #'
 #'    - `poly_solidity()` Computes the solidity of a shape as the ratio of
 #' the shape area and the convex hull area.
@@ -43,6 +49,9 @@
 #'
 #'    - `poly_centdist()` Computes the Euclidean distance between every point on
 #' the perimeter and the centroid of the object.
+#'
+#'    - `poly_centdist_mass()` Computes the Euclidean distance between every point on
+#' the perimeter and the center of mass of the object.
 #'
 #'    - `poly_perimeter()` Computes the perimeter of a polygon given by the
 #' vertices in the vectors x and y.
@@ -171,7 +180,7 @@
 
 #'
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' # A 2 x 2 square
 #' df <- draw_square(side = 2)
@@ -386,6 +395,17 @@ poly_centdist <- function(x) {
     lapply(x, help_centdist)
   } else{
     help_centdist(x)
+  }
+}
+
+#' @name utils_polygon
+#' @export
+# Computes the euclidean distance between every points and the centroid
+poly_centdist_mass <- function(x) {
+  if (inherits(x, "list")) {
+    lapply(x, help_centdist2)
+  } else{
+    help_centdist2(x)
   }
 }
 
@@ -1063,9 +1083,9 @@ plot_ellipse <- function(object,
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' cont <- contours[[2]]
 #' plot_polygon(cont |> conv_hull() |> poly_align())
-
 #' #  width below 5th, 25th, 50th, 75th, and 95th percentiles of the length
 #' wd <- poly_width_at(cont)
 #' wd
@@ -1073,11 +1093,13 @@ plot_ellipse <- function(object,
 #' # width along the height
 #' poly_width_at(cont, at = "height", plot = TRUE)
 #'
+#' }
 #'
 poly_width_at <- function(x,
                           at = c(0.05, 0.25, 0.5, 0.75, 0.95),
                           unify = FALSE,
                           plot = FALSE){
+  check_ebi()
   if(!is.numeric(at) && any(at != "height")){
     warning("`at` must be one of 'height' or a numeric vector in the range 0-1.")
   }
@@ -1150,6 +1172,7 @@ poly_width_at <- function(x,
 #' the median pixel index, and the maximum pixel index.
 #' @importFrom stats median
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' leaf <- image_pliman("sev_leaf.jpg")
 #' bin <- image_binary(leaf, "NB")[[1]]
@@ -1164,6 +1187,7 @@ poly_width_at <- function(x,
 #' points(x = 248, y = 17, pch = 16, col = "red", cex = 2)
 #' points(x = 163, y = 100, pch = 16, col = "red", cex = 2)
 #' points(x = 333, y = 100, pch = 16, col = "red", cex = 2)
+#' }
 #'
 #'
 #' @export
@@ -1211,6 +1235,7 @@ pixel_index <- function(bin,
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' # a matrix of coordinates
 #' angls <- poly_apex_base_angle(contours[[2]])
@@ -1218,6 +1243,7 @@ pixel_index <- function(bin,
 #'
 #' # or a list of coordinates
 #' poly_apex_base_angle(contours)
+#' }
 poly_apex_base_angle <- function(x,
                                  percentiles = c(0.25, 0.75),
                                  invert = FALSE,
@@ -1279,7 +1305,6 @@ poly_apex_base_angle <- function(x,
 #' @return The PCV value(s) computed for the contour(s).
 #'
 #' @details
-#'
 #' The PCV is computed using the following formula: \deqn{PCV =
 #' \frac{sum(dists) \times sd(dists)}{perim}} where \eqn{dists}
 #' represents the distances between corresponding points in the original and
@@ -1308,6 +1333,7 @@ poly_apex_base_angle <- function(x,
 #'   complexity values for each polygon.
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' set.seed(20)
 #' shp <- efourier_shape(npoints = 1000)
@@ -1319,6 +1345,7 @@ poly_apex_base_angle <- function(x,
 #' smo <- poly_smooth(shp2, niter = 100, plot = FALSE)
 #' plot_contour(smo, col = "red")
 #' poly_pcv(shp2)
+#' }
 #'
 #' @export
 #'

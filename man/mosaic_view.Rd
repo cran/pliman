@@ -9,18 +9,19 @@ mosaic_view(
   r = 3,
   g = 2,
   b = 1,
-  re = 4,
-  nir = 5,
+  edit = FALSE,
   title = "",
+  shapefile = NULL,
+  attribute = NULL,
   viewer = c("mapview", "base"),
   show = c("rgb", "index"),
   index = "B",
-  max_pixels = 5e+05,
+  max_pixels = 1e+06,
   downsample = NULL,
+  downsample_fun = "nearest",
   alpha = 1,
   quantiles = c(0, 1),
-  domain = NULL,
-  color_regions = custom_palette(),
+  color_regions = custom_palette(c("red", "yellow", "forestgreen")),
   axes = FALSE,
   ...
 )
@@ -29,17 +30,19 @@ mosaic_view(
 \item{mosaic}{A mosaic of class \code{SpatRaster}, generally imported with
 \code{\link[=mosaic_input]{mosaic_input()}}.}
 
-\item{r}{The layer for the Red band (default: 3).}
+\item{r, g, b}{The layer for the Red, Green and Blue band, respectively.
+Defaults to \code{1}, \code{2}, and \code{3}.}
 
-\item{g}{The layer for the Green band (default: 2).}
-
-\item{b}{The layer for the Blue band (default: 1).}
-
-\item{re}{The layer for the Red-edge band (default: 4).}
-
-\item{nir}{The layer for the Near-infrared band(default: 5).}
+\item{edit}{If \code{TRUE} enable editing options using \code{\link[mapedit:editMap]{mapedit::editMap()}}.}
 
 \item{title}{A title for the generated map or plot (default: "").}
+
+\item{shapefile}{An optional shapefile of class \code{sf} to be plotted over the
+mosaic. It can be, for example, a plot-level result returned by
+\code{\link[=mosaic_analyze]{mosaic_analyze()}}.}
+
+\item{attribute}{The attribute name(s) or column number(s) in shapefile table
+of the column(s) to be rendered.}
 
 \item{viewer}{The viewer option. If not provided, the value is retrieved
 using \code{\link[=get_pliman_viewer]{get_pliman_viewer()}}. This option controls the type of viewer to use
@@ -65,14 +68,11 @@ x height) is greater than \code{max_pixels} a downsampling factor will be
 automatically chosen so that the number of plotted pixels approximates the
 \code{max_pixels}.}
 
+\item{downsample_fun}{The resampling function. Defaults to nearest. See further details in \code{\link[=mosaic_aggregate]{mosaic_aggregate()}}.}
+
 \item{alpha}{opacity of the fill color of the raster layer(s).}
 
-\item{quantiles}{the upper and lower quantiles used for color stretching. If
-set to \code{NULL}, stretching is performed basing on 'domain' argument.}
-
-\item{domain}{the upper and lower values used for color stretching. This is
-used only if \code{'quantiles'} is \code{NULL}. If both '\verb{domain'} and \code{'quantiles'} are
-set to \code{NULL}, stretching is applied based on min-max values.}
+\item{quantiles}{the upper and lower quantiles used for color stretching.}
 
 \item{color_regions}{The color palette for displaying index values. Default
 is \code{\link[=custom_palette]{custom_palette()}}.}
@@ -88,14 +88,14 @@ An sf object, the same object returned by \code{\link[mapedit:editMap]{mapedit::
 Mosaic View
 }
 \details{
-The function can generate either an interactive map using the
-'mapview' package or a static plot using the 'base' package, depending on
-the \code{viewer} and \code{show} parameters. If show = "index" is used, the function
-first computes an image index that can be either an RGB-based index or a
-multispectral index, if a multispectral mosaic is provided.
+The function can generate either an interactive map using the 'mapview'
+package or a static plot using the 'base' package, depending on the \code{viewer}
+and \code{show} parameters. If show = "index" is used, the function first computes
+an image index that can be either an RGB-based index or a multispectral
+index, if a multispectral mosaic is provided.
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 # Load a raster showing the elevation of Luxembourg
 mosaic <- mosaic_input(system.file("ex/elev.tif", package="terra"))

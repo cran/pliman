@@ -17,8 +17,13 @@ image_segment(
   k = 0.1,
   windowsize = NULL,
   col_background = NULL,
+  na_background = FALSE,
   has_white_bg = FALSE,
   fill_hull = FALSE,
+  erode = FALSE,
+  dilate = FALSE,
+  opening = FALSE,
+  closing = FALSE,
   filter = FALSE,
   invert = FALSE,
   plot = TRUE,
@@ -87,6 +92,8 @@ adaptive thresholding. By default it is set to \code{1/3 * minxy}, where
 \item{col_background}{The color of the segmented background. Defaults to
 \code{NULL} (white background).}
 
+\item{na_background}{Consider the background as NA? Defaults to FALSE.}
+
 \item{has_white_bg}{Logical indicating whether a white background is present.
 If \code{TRUE}, pixels that have R, G, and B values equals to 1 will be
 considered as \code{NA}. This may be useful to compute an image index for
@@ -95,10 +102,25 @@ background will not be considered for the threshold computation.}
 
 \item{fill_hull}{Fill holes in the objects? Defaults to \code{FALSE}.}
 
-\item{filter}{Performs median filtering in the binary image? See more at
-\code{\link[=image_filter]{image_filter()}}. Defaults to \code{FALSE}. Use a positive integer to define the
-size of the median filtering. Larger values are effective at removing
-noise, but adversely affect edges.}
+\item{erode, dilate, opening, closing, filter}{\strong{Morphological operations (brush size)}
+\itemize{
+\item \code{dilate} puts the mask over every background pixel, and sets it to
+foreground if any of the pixels covered by the mask is from the foreground.
+\item \code{erode} puts the mask over every foreground pixel, and sets it to
+background if any of the pixels covered by the mask is from the background.
+\item \code{opening} performs an erosion followed by a dilation. This helps to
+remove small objects while preserving the shape and size of larger objects.
+\item \code{closing} performs a dilatation followed by an erosion. This helps to
+fill small holes while preserving the shape and size of larger objects.
+\item \code{filter} performs median filtering in the binary image. Provide a positive
+integer > 1 to indicate the size of the median filtering. Higher values are
+more efficient to remove noise in the background but can dramatically impact
+the perimeter of objects, mainly for irregular perimeters such as leaves
+with serrated edges.
+}
+
+Hierarchically, the operations are performed as opening > closing > filter.
+The value declared in each argument will define the brush size.}
 
 \item{invert}{Inverts the binary image, if desired. For
 \code{image_segmentation_iter()} use a vector with the same length of \code{nseg}.}
@@ -146,11 +168,12 @@ the proportions of segmented pixels.
 }
 }
 \examples{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 img <- image_pliman("soybean_touch.jpg", plot = TRUE)
 image_segment(img, index = c("R, G, B"))
+}
 
-# adaptive thresholding
 
 }
 \references{

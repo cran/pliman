@@ -22,6 +22,15 @@
 #' * `soybean_touch.jpg` Soybean grains with a cyan background touching one each
 #' other.
 #' * `field_mosaic.jpg` An UVA image from a soybean field.
+#' @format `*.tif` format
+#'
+#' The following `.tif` files are provided as sample data, representing a slice
+#' from a large orthomosaic with soybean plots in the vegetative stage. These
+#' files were kindly provided by Arthur Bernardeli.
+#' - **`ortho.tif`**: An orthomosaic with soybean plots (5 rows and 3 columns).
+#' - **`dsm.tif`**: A digital surface model (DSM) for the soybean plots.
+#' - **`dtm.tif`**: A digital terrain model (DTM) for the area.
+#' - **`mask.tif`**: A mask that represents the soybean plants.
 #' @md
 #' @source Personal data, Gupta et al. (2020).
 #' @references Gupta, S., Rosenthal, D. M., Stinchcombe, J. R., & Baucom, R. S.
@@ -34,14 +43,16 @@
 #' @keywords images
 NULL
 
+
 .onAttach <- function(libname, pkgname) {
-  vers <-  "2.0.1"
-  packageStartupMessage("|==========================================================|")
-  packageStartupMessage("| Tools for Plant Image Analysis (pliman ", vers,  ")            |")
-  packageStartupMessage("| Author: Tiago Olivoto                                    |")
-  packageStartupMessage("| Type `citation('pliman')` to know how to cite pliman     |")
-  packageStartupMessage("| Visit 'http://bit.ly/pkg_pliman' for a complete tutorial |")
-  packageStartupMessage("|==========================================================|")
+  vers <-  "3.0.0"
+  packageStartupMessage("|======================================================|")
+  packageStartupMessage("| Welcome to the pliman package (version ", vers, ")!       |")
+  packageStartupMessage("| Developed collaboratively by NEPEM - nepemufsc.com   |")
+  packageStartupMessage("| Group lead: Prof. Tiago Olivoto                      |")
+  packageStartupMessage("| For citation: type `citation('pliman')`              |")
+  packageStartupMessage("| We welcome your feedback and suggestions!            |")
+  packageStartupMessage("|======================================================|")
   check_ebi()
   check_mapview()
 }
@@ -53,7 +64,11 @@ if (getRversion() >= "2.15.1") {
       "s.radius.min", "y", "s.area", "s.perimeter", "symptomatic", "m.eccentricity",
       "m.majoraxis", "s.radius.mean", "n_greater", "n_less", "setNames", "s.radius.sd",
       "perimeter", "radius_max", "radius_mean", "radius_min", "radius_sd", "X1",
-      "X2", "%dopar%", "i", "img", "plotn", "x", "leaf"))
+      "X2", "%dofut%", "i", "img", "plotn", "x", "leaf", "Band", "block", "mosaic",
+      "geometry", "n", "area_sum", "individual", "compute_downsample", "plot_id",
+      "re", "nir", "coverage_fraction", "sigma", "summarize_quantiles", "prop", "plot_id_seq",
+      "B1", "B2", "B3", "cluster", "h", "s", "column", "data", "plot_area", "unique_id",
+      "diam_max"))
 }
 
 

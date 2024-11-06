@@ -42,7 +42,7 @@
 #' attempted.
 #' @export
 #' @examples
-#' \donttest{
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' # get file name, directory and extension
 #' file <- "E:/my_folder/my_subfolder/image1.png"
@@ -188,24 +188,6 @@ manipulate_files <- function(pattern,
     }
   }
 }
-
-#' @name utils_file
-#' @export
-pliman_indexes <- function(){
-  read.csv(file = system.file("indexes.csv",
-                              package = "pliman",
-                              mustWork = TRUE),
-           header = T, sep = ";")$Index
-}
-#' @name utils_file
-#' @export
-pliman_indexes_eq <- function(){
-  read.csv(file = system.file("indexes.csv",
-                              package = "pliman",
-                              mustWork = TRUE),
-           header = T, sep = ";")$Equation
-}
-
 
 #' Add leading zeros to a numeric sequence
 #'

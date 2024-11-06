@@ -21,16 +21,21 @@
 #'   271–272.
 #' @export
 #'
+#'
+#'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #' library(pliman)
 #' img <- image_pliman("sev_leaf_nb.jpg", plot = TRUE)
 #' object_edge(img)
+#' }
 #'
 object_edge <- function(img,
                         sigma = 1,
                         threshold = "Otsu",
                         thinning = FALSE,
                         plot = TRUE){
+  check_ebi()
   gray <- image_index(img,
                       "GRAY",
                       plot = FALSE,

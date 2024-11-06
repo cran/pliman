@@ -12,7 +12,11 @@ object_label(
   threshold = "Otsu",
   k = 0.1,
   windowsize = NULL,
+  opening = FALSE,
+  closing = FALSE,
   filter = FALSE,
+  erode = FALSE,
+  dilate = FALSE,
   watershed = FALSE,
   tolerance = NULL,
   extension = NULL,
@@ -54,11 +58,25 @@ higher.}
 adaptive thresholding. By default it is set to \code{1/3 * minxy}, where
 \code{minxy} is the minimum dimension of the image (in pixels).}
 
-\item{filter}{Performs median filtering in the binary image? (Defaults to
-\code{FALSE}). Provide a positive integer > 1 to indicate the size of the median
-filtering. Higher values are more efficient to remove noise in the
-background but can dramatically impact the perimeter of objects, mainly for
-irregular perimeters such as leaves with serrated edges.}
+\item{erode, dilate, opening, closing, filter}{\strong{Morphological operations (brush size)}
+\itemize{
+\item \code{dilate} puts the mask over every background pixel, and sets it to
+foreground if any of the pixels covered by the mask is from the foreground.
+\item \code{erode} puts the mask over every foreground pixel, and sets it to
+background if any of the pixels covered by the mask is from the background.
+\item \code{opening} performs an erosion followed by a dilation. This helps to
+remove small objects while preserving the shape and size of larger objects.
+\item \code{closing} performs a dilatation followed by an erosion. This helps to
+fill small holes while preserving the shape and size of larger objects.
+\item \code{filter} performs median filtering in the binary image. Provide a positive
+integer > 1 to indicate the size of the median filtering. Higher values are
+more efficient to remove noise in the background but can dramatically impact
+the perimeter of objects, mainly for irregular perimeters such as leaves
+with serrated edges.
+}
+
+Hierarchically, the operations are performed as opening > closing > filter.
+The value declared in each argument will define the brush size.}
 
 \item{watershed}{If \code{TRUE} (default) performs watershed-based object
 detection. This will detect objects even when they are touching one other.
@@ -97,8 +115,10 @@ number of connected objects in x. This is a wrapper to \link[EBImage:bwlabel]{EB
 \link[EBImage:watershed]{EBImage::watershed} (if \code{watershed = TRUE}).
 }
 \examples{
+if (interactive() && requireNamespace("EBImage")) {
 img <- image_pliman("soybean_touch.jpg")
 # segment the objects using the "B" (blue) band.
 object_label(img, index = "B")
 object_label(img, index = "B", watershed = TRUE)
+}
 }

@@ -91,20 +91,17 @@ apply_fun_to_imgs <- function(pattern,
   }
 
   if(parallel == TRUE){
-    workers <- ifelse(is.null(workers), ceiling(detectCores() * 0.5), workers)
-    cl <- parallel::makePSOCKcluster(workers)
-    doParallel::registerDoParallel(cl)
-    on.exit(parallel::stopCluster(cl))
-
-    ## declare alias for dopar command
-    `%dopar%` <- foreach::`%dopar%`
+    workers <- ifelse(is.null(workers), ceiling(parallel::detectCores() * 0.5), workers)
+    future::plan(future::multisession, workers = workers)
+    on.exit(future::plan(future::sequential))
+    `%dofut%` <- doFuture::`%dofuture%`
 
     if(verbose == TRUE){
-      message("Image processing using multiple sessions (",workers, "). Please wait.")
+      message("Processing ", length(imgs), " images in multiple sessions (",workers, "). Please, wait.")
     }
 
     results <-
-      foreach::foreach(i = seq_along(imgs), .packages = "pliman") %dopar%{
+      foreach::foreach(i = seq_along(imgs)) %dofut%{
         help_apply(imgs[[i]],
                    fun,
                    ...,

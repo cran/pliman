@@ -8,12 +8,15 @@ image}
 plot_index_shp(
   object,
   attribute = "coverage",
-  color = c("red", "green"),
+  r = 1,
+  g = 2,
+  b = 3,
+  color = c("red", "yellow", "darkgreen"),
   viewer = c("mapview", "base"),
   max_pixels = 5e+05,
   downsample = NULL,
   downsample_fun = NULL,
-  alpha = 0.5,
+  alpha = 0.7,
   legend.position = "bottom",
   na.color = "gray",
   classes = 6,
@@ -26,6 +29,9 @@ plot_index_shp(
 
 \item{attribute}{The name of the quantitative variable in the
 \code{object_index} to be used for coloring the rectangles.}
+
+\item{r, g, b}{The layer for the Red, Green and Blue band, respectively.
+Defaults to \code{1}, \code{2}, and \code{3}.}
 
 \item{color}{A vector of two colors to be used for the color scale.}
 
@@ -78,21 +84,20 @@ specified in the \code{attribute} argument and should be present in the
 rectangles are colored using a color scale.
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 
 # Computes the DGCI index for each flax leaf
 flax <- image_pliman("flax_leaves.jpg", plot =TRUE)
 res <-
    analyze_objects_shp(flax,
-                       buffer_x = 0.2,
-                       buffer_y = 0.2,
+                       buffer_x = 0.1,
+                       buffer_y = 0.02,
                        nrow = 3,
                        ncol = 5,
                        plot = FALSE,
                        object_index = "DGCI")
-plot(res$final_image)
-plot_index_shp(res)
+plot_index_shp(res, attribute = "DGCI")
 }
 
 }

@@ -10,6 +10,7 @@ image_view(
   r = 1,
   g = 2,
   b = 3,
+  edit = FALSE,
   alpha = 0.7,
   attribute = "area",
   title = "Edit the image",
@@ -19,7 +20,6 @@ image_view(
   downsample = NULL,
   color_regions = custom_palette(),
   quantiles = c(0, 1),
-  domain = NULL,
   ...
 )
 }
@@ -33,6 +33,8 @@ contour of the analyzed objects, with a color gradient defined by
 
 \item{r, g, b}{The layer for the Red, Green and Blue band, respectively.
 Defaults to \code{1}, \code{2}, and \code{3}.}
+
+\item{edit}{If \code{TRUE} enable editing options using \code{\link[mapedit:editMap]{mapedit::editMap()}}.}
 
 \item{alpha}{The transparency level of the rectangles' color (between 0 and 1).}
 
@@ -57,12 +59,8 @@ find the best downsampling factor to approximate the \code{max_pixels} value.}
 \item{color_regions}{The color palette for displaying index values. Default
 is \code{\link[=custom_palette]{custom_palette()}}.}
 
-\item{quantiles}{the upper and lower quantiles used for color stretching. If
-set to \code{NULL}, stretching is performed basing on 'domain' argument.}
-
-\item{domain}{the upper and lower values used for color stretching. This is
-used only if \code{'quantiles'} is \code{NULL}. If both '\verb{domain'} and \code{'quantiles'}
-are set to \code{NULL}, stretching is applied based on min-max values.}
+\item{quantiles}{the upper and lower quantiles used for color stretching. Set
+to \code{c(0, 1)}}
 
 \item{...}{Additional arguments to be passed to \code{downsample_fun}.}
 }
@@ -74,7 +72,7 @@ This function allows users to interactively edit and analyze an image using
 mapview and mapedit packages.
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 # Example usage:
 img <- image_pliman("sev_leaf.jpg")
 image_view(img)

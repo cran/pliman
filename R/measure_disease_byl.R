@@ -36,6 +36,7 @@
 #' @export
 #'
 #' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
 #'library(pliman)
 #'img <- image_pliman("mult_leaves.jpg", plot = TRUE)
 #'sev <-
@@ -44,6 +45,7 @@
 #'                      index_dh = "NGRDI",
 #'                      workers = 2)
 #' sev$severity
+#' }
 #'
 #'
 measure_disease_byl <- function(img,
@@ -54,7 +56,11 @@ measure_disease_byl <- function(img,
                                 watershed = TRUE,
                                 invert = FALSE,
                                 fill_hull = FALSE,
-                                filter = 3,
+                                opening = c(10, 0),
+                                closing = c(0, 0),
+                                filter = c(0, 0),
+                                erode = c(0, 0),
+                                dilate = c(0, 0),
                                 threshold = "Otsu",
                                 extension = NULL,
                                 tolerance = NULL,
@@ -71,6 +77,7 @@ measure_disease_byl <- function(img,
                                 show_features = FALSE,
                                 verbose = TRUE,
                                 ...){
+  check_ebi()
 
   if(is.null(dir_original)){
     diretorio_original <- paste("./", sep = "")
@@ -127,9 +134,13 @@ measure_disease_byl <- function(img,
     splits <- object_split(img,
                            index = index,
                            watershed = watershed,
-                           invert = invert,
+                           invert = invert[[1]],
                            fill_hull = fill_hull,
-                           filter = filter,
+                           opening = opening[[1]],
+                           closing = closing[[1]],
+                           filter = filter[[1]],
+                           erode = erode[[1]],
+                           dilate = dilate[[1]],
                            threshold = threshold,
                            extension = extension,
                            tolerance = tolerance,
@@ -151,8 +162,13 @@ measure_disease_byl <- function(img,
                                  dir_processed = diretorio_processada,
                                  prefix = paste0(name_ori, "_", i),
                                  name = "",
+                                 opening = opening,
+                                 closing = closing,
                                  filter = filter,
+                                 erode = erode,
+                                 dilate = dilate,
                                  threshold = threshold,
+                                 invert = ifelse(length(invert) > 1, invert[[2]], invert[[1]]),
                                  ...)
                })
 
@@ -170,7 +186,11 @@ measure_disease_byl <- function(img,
                                  dir_processed = diretorio_processada,
                                  prefix = paste0(name_ori, "_", i),
                                  name = "",
+                                 opening = opening,
+                                 closing = closing,
                                  filter = filter,
+                                 erode = erode,
+                                 dilate = dilate,
                                  threshold = threshold,
                                  ...)
                })
@@ -244,20 +264,17 @@ measure_disease_byl <- function(img,
       stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(detectCores()*.5), workers)
-      clust <- makeCluster(nworkers)
-      clusterExport(clust,
-                    varlist = c("names_plant", "help_byl", "img_healthy", "img_symptoms", "back"),
-                    envir=environment())
-      on.exit(stopCluster(clust))
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.3), workers)
+      future::plan(future::multisession, workers = nworkers)
+      on.exit(future::plan(future::sequential))
+      `%dofut%` <- doFuture::`%dofuture%`
       if(verbose == TRUE){
         message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
       }
       results <-
-        parLapply(clust, names_plant,
-                  function(x){
-                    help_byl(img  = x, img_healthy, img_symptoms, back, index_dh, index_lb)
-                  })
+        foreach::foreach(i = seq_along(names_plant)) %dofut%{
+          help_byl(img  = names_plant[i], img_healthy, img_symptoms, back, index_dh, index_lb)
+        }
     } else{
       results <- list()
       pb <- progress(max = length(plants), style = 4)

@@ -11,6 +11,8 @@ mosaic_crop(
   b = 1,
   re = 4,
   nir = 5,
+  shapefile = NULL,
+  buffer = 0,
   show = c("rgb", "index"),
   index = "R",
   max_pixels = 5e+05,
@@ -22,15 +24,17 @@ mosaic_crop(
 \item{mosaic}{A mosaic of class \code{SpatRaster}, generally imported with
 \code{\link[=mosaic_input]{mosaic_input()}}.}
 
-\item{r}{The layer for the Red band (default: 3).}
+\item{r, g, b, re, nir}{The red, green, blue, red-edge, and  near-infrared bands
+of the image, respectively. By default, the function assumes a BGR as input
+(b = 1, g = 2, r = 3). If a multispectral image is provided up to seven
+bands can be used to compute built-in indexes. There are no limitation of
+band numbers if the index is computed using the band name.}
 
-\item{g}{The layer for the Green band (default: 2).}
+\item{shapefile}{An optional \code{SpatVector}, that can be created with
+\code{\link[=shapefile_input]{shapefile_input()}}.}
 
-\item{b}{The layer for the Blue band (default: 1).}
-
-\item{re}{The layer for the Red-edge band (default: 4).}
-
-\item{nir}{The layer for the Near-infrared band(default: 5).}
+\item{buffer}{A buffering factor to be used when a shapefile is used to crop
+the mosaic.}
 
 \item{show}{The display option for the map view. Options are "rgb" for RGB
 view and "index" for index view.}
@@ -59,10 +63,12 @@ interactive map or plot.
 This function uses the \code{mosaic_view} function to display an
 interactive map or plot of the mosaic raster, allowing users to draw a
 rectangle to select the cropping area. The selected area is then cropped
-from the input mosaic and returned as a new \code{SpatRaster} object.
+from the input mosaic and returned as a new \code{SpatRaster} object. If
+\code{shapefile} is declared, the mosaic will be cropped to the extent of
+\code{shapefile}.
 }
 \examples{
-if(interactive()){
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 # Load a raster showing the elevation of Luxembourg
 mosaic <- mosaic_input(system.file("ex/elev.tif", package="terra"))

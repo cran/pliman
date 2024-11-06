@@ -3,6 +3,7 @@
 \name{analyze_objects}
 \alias{analyze_objects}
 \alias{plot.anal_obj}
+\alias{plot.anal_obj_ls}
 \alias{analyze_objects_iter}
 \title{Analyzes objects in an image}
 \usage{
@@ -38,6 +39,10 @@ analyze_objects(
   resize = FALSE,
   trim = FALSE,
   fill_hull = FALSE,
+  erode = FALSE,
+  dilate = FALSE,
+  opening = FALSE,
+  closing = FALSE,
   filter = FALSE,
   invert = FALSE,
   object_size = "medium",
@@ -90,6 +95,14 @@ analyze_objects(
 )
 
 \method{plot}{anal_obj}(
+  x,
+  which = "measure",
+  measure = "area",
+  type = c("density", "histogram"),
+  ...
+)
+
+\method{plot}{anal_obj_ls}(
   x,
   which = "measure",
   measure = "area",
@@ -215,7 +228,7 @@ Haralick matrix. Defaults to 32. See Details}
 compute the Haralick features. See Details.}
 
 \item{har_band}{The band to compute the Haralick features (1 = R, 2 = G, 3 =
-B). Defaults to 1.}
+B). Defaults to 1. Other allowed value is \code{har_band = "GRAY"}.}
 
 \item{pcv}{Computes the Perimeter Complexity Value? Defaults to \code{FALSE}.}
 
@@ -236,10 +249,22 @@ the background. IMPORTANT: Objects touching each other can be combined into
 one single object, which may underestimate the number of objects in an
 image.}
 
-\item{filter}{Performs median filtering in the binary image? See more at
-\code{\link[=image_filter]{image_filter()}}. Defaults to \code{FALSE}. Use a positive integer to define the
-size of the median filtering. Larger values are effective at removing noise,
-but adversely affect edges.}
+\item{opening, closing, filter, erode, dilate}{\strong{Morphological operations (brush size)}
+\itemize{
+\item \code{dilate} puts the mask over every background pixel, and sets it to
+foreground if any of the pixels covered by the mask is from the foreground.
+\item \code{erode} puts the mask over every foreground pixel, and sets it to
+background if any of the pixels covered by the mask is from the background.
+\item \code{opening} performs an erosion followed by a dilation. This helps to
+remove small objects while preserving the shape and size of larger objects.
+\item \code{closing} performs a dilatation followed by an erosion. This helps to
+fill small holes while preserving the shape and size of larger objects.
+\item \code{filter} performs median filtering in the binary image. Provide a positive
+integer > 1 to indicate the size of the median filtering. Higher values are
+more efficient to remove noise in the background but can dramatically impact
+the perimeter of objects, mainly for irregular perimeters such as leaves
+with serrated edges.
+}}
 
 \item{invert}{Inverts the binary image if desired. This is useful to process
 images with a black background. Defaults to \code{FALSE}. If \code{reference = TRUE}
@@ -322,7 +347,7 @@ lower or upper size, use the \code{lower_size} and \code{upper_size} arguments.}
 \item{lower_size, upper_size}{Lower and upper limits for size for the image
 analysis. Plant images often contain dirt and dust.  Upper limit is set to
 \code{NULL}, i.e., no upper limit used. One can set a known area or use
-\code{lower_limit = 0} to select all objects (not advised). Objects that matches
+\code{lower_size = 0} to select all objects (not advised). Objects that matches
 the size of a given range of sizes can be selected by setting up the two
 arguments. For example, if \code{lower_size = 120} and \code{upper_size = 140},
 objects with size greater than or equal 120 and less than or equal 140 will
@@ -597,7 +622,8 @@ possible to identify textures with different scales, e.g., a texture that is
 repeated every two pixels or 10 pixels. By default, the Haralick features
 are computed with the R band. To chance this default, use the argument
 \code{har_band}. For example, \code{har_band = 2} will compute the features with the
-green band.
+green band. Additionaly, har_band = "GRAY" can be used. In this case, a
+grayscale (0.299 * R + 0.587 * G + 0.114 * B) is used.
 \item If \code{efourier = TRUE} is used, an Elliptical Fourier Analysis (Kuhl and
 Giardina, 1982) is computed for each object contour using \code{\link[=efourier]{efourier()}}.
 \item If \code{veins = TRUE} (experimental), vein features are computed. This will call
@@ -619,7 +645,7 @@ be adjusted with the \code{width_at_percentiles} argument.
 }
 }
 \examples{
-\donttest{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 img <- image_pliman("soybean_touch.jpg")
 obj <- analyze_objects(img)
@@ -636,7 +662,8 @@ top$results
 
 
 #' ########################### Example 1 #########################
-# Correct the measures based on the area of the largest object
+# Correct the measures based on the area of the largest ob
+ject
 # note that since the reference object
 
 img <- image_pliman("flax_grains.jpg")
@@ -651,7 +678,7 @@ res <-
                   lower_noise = 0.3)
 }
 
-\donttest{
+if (interactive() && requireNamespace("EBImage")) {
 library(pliman)
 
 img <- image_pliman("soy_green.jpg")

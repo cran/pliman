@@ -1,5 +1,6 @@
 #include <RcppArmadillo.h>
 #include <queue>
+#include <cmath>
 using namespace Rcpp;
 using namespace arma;
 
@@ -804,4 +805,95 @@ IntegerMatrix helper_guo_hall(IntegerMatrix image) {
   } while (n > 0);
 
   return image;
+}
+
+// IDW interpolation function using Rcpp
+// [[Rcpp::export]]
+NumericVector idw_interpolation_cpp(NumericVector x, NumericVector y, NumericVector values,
+                                    NumericVector new_x, NumericVector new_y, double power = 2) {
+  // Calculate distances between new points and existing points
+  NumericMatrix distances(new_x.size(), x.size());
+  for (int i = 0; i < new_x.size(); ++i) {
+    distances(i, _) = sqrt(pow(x - new_x[i], 2) + pow(y - new_y[i], 2));
+  }
+
+  // Initialize a NumericVector to store results
+  NumericVector results(new_x.size(), NA_REAL);
+
+  for (int i = 0; i < new_x.size(); ++i) {
+    // Inverse distance weighting formula
+    NumericVector weights = 1.0 / pow(distances(i, _), power);
+    double weighted_sum = sum(weights * values);
+    double total_weight = sum(weights);
+    results[i] = total_weight > 0 ? weighted_sum / total_weight : NA_REAL;
+
+  }
+  return results;
+}
+// Function to adjust the bounding box around the centroid
+NumericMatrix adjust_bbox(NumericMatrix coords, double width, double height) {
+  NumericVector cent = colMeans(coords(Range(0, 3), _));
+  double xmin = cent[0] - width / 2;
+  double xmax = cent[0] + width / 2;
+  double ymin = cent[1] - height / 2;
+  double ymax = cent[1] + height / 2;
+
+  NumericMatrix new_bbox(5, 2);
+  new_bbox(0, 0) = xmin; new_bbox(0, 1) = ymin;
+  new_bbox(1, 0) = xmin; new_bbox(1, 1) = ymax;
+  new_bbox(2, 0) = xmax; new_bbox(2, 1) = ymax;
+  new_bbox(3, 0) = xmax; new_bbox(3, 1) = ymin;
+  new_bbox(4, 0) = xmin; new_bbox(4, 1) = ymin; // Closing the polygon
+
+  return new_bbox;
+}
+
+// Function to rotate a polygon around its centroid
+NumericMatrix rotate_polygon(NumericMatrix coords, double angle, NumericVector centroid) {
+  NumericMatrix rot_mat(2, 2);
+  rot_mat(0, 0) = cos(angle);
+  rot_mat(0, 1) = -sin(angle);
+  rot_mat(1, 0) = sin(angle);
+  rot_mat(1, 1) = cos(angle);
+
+  NumericMatrix rotated_coords(coords.nrow(), coords.ncol());
+
+  for (int i = 0; i < coords.nrow(); ++i) {
+    NumericVector point = coords(i, _) - centroid;
+    NumericVector rotated_point = NumericVector::create(
+      rot_mat(0, 0) * point[0] + rot_mat(0, 1) * point[1],
+                                                      rot_mat(1, 0) * point[0] + rot_mat(1, 1) * point[1]
+    ) + centroid;
+    rotated_coords(i, _) = rotated_point;
+  }
+
+  return rotated_coords;
+}
+
+// [[Rcpp::export]]
+List add_width_height_cpp(List grid, double width, double height, NumericVector points_align) {
+  int n = grid.size();
+  List adjusted_polygons(n);
+
+  // Calculate the rotation angle
+  double x1 = points_align[0];
+  double y1 = points_align[2];
+  double x2 = points_align[1];
+  double y2 = points_align[3];
+  double rotation_angle = atan2(y2 - y1, x2 - x1);
+
+  for (int i = 0; i < n; ++i) {
+    NumericMatrix coords = as<NumericMatrix>(grid[i]);
+    NumericMatrix new_bbox = adjust_bbox(coords, width, height);
+
+    // Calculate the centroid of the new bounding box
+    NumericVector bbox_centroid = colMeans(new_bbox(Range(0, 3), _));
+
+    // Rotate the bounding box polygon
+    NumericMatrix rotated_coords = rotate_polygon(new_bbox, rotation_angle, bbox_centroid);
+
+    adjusted_polygons[i] = rotated_coords;
+  }
+
+  return adjusted_polygons;
 }
