@@ -1,16 +1,22 @@
 validate_and_replicate <- function(argument, created_shapes, verbose = TRUE) {
   if ((length(argument) != length(created_shapes)) & verbose) {
-    warning(paste0("`", deparse(substitute(argument)), "` must have length 1 or ", length(created_shapes), " (the number of drawn polygons)."), call. = FALSE)
+    cli::cli_warn(c(
+      "!" = "`{.arg {deparse(substitute(argument))}}` must have length 1 or {.val {length(created_shapes)}} (the number of drawn polygons)."
+    ))
   }
+
   if (length(argument) == 1 & length(created_shapes) != 1) {
     argument <- rep(argument, length(created_shapes))
   }
   return(argument)
 }
 validate_and_replicate2 <- function(argument, created_shapes, verbose = TRUE) {
-  if ((!is.null(argument) & (length(argument) != nrow(created_shapes)))  & verbose) {
-    warning(paste0("`", deparse(substitute(argument)), "` must have length 1 or ", nrow(created_shapes), " (the number of drawn polygons)."), call. = FALSE)
+  if ((!is.null(argument) && (length(argument) != nrow(created_shapes))) && verbose) {
+    cli::cli_warn(c(
+      "!" = "`{.arg {deparse(substitute(argument))}}` must have length 1 or {.val {nrow(created_shapes)}} (the number of drawn polygons)."
+    ))
   }
+
   if (length(argument) == 1 & nrow(created_shapes) != 1) {
     argument <- rep(argument, nrow(created_shapes))
   }
@@ -38,7 +44,8 @@ find_aggrfact <- function(mosaic, max_pixels = 1000000){
     } else if (n > 1) {
       invisible(ceiling(nr/(n+1)) * ceiling(nc/(n+1)))
     } else {
-      stop("Invalid downsampling factor. n must be a non-negative integer.")
+      cli::cli_abort("{.arg n} must be a non-negative integer.")
+
     }
   }
   nr <- nrow(mosaic)
@@ -150,7 +157,7 @@ align_dsm <- function(dsm, mosaic) {
   if (!terra::ext(dsm) == terra::ext(mosaic) ||
       !all(terra::res(dsm) == terra::res(mosaic)) ||
       !terra::crs(dsm) == terra::crs(mosaic)) {
-    message("Adjusting DSM to match mosaic extent, resolution, and CRS.")
+    cli::cli_alert_info("Adjusting DSM to match mosaic extent, resolution, and CRS.")
     # Align DSM to match the mosaic properties
     dsm <- terra::resample(dsm, mosaic, method = "lanczos")
   }
@@ -171,7 +178,7 @@ align_dsm <- function(dsm, mosaic) {
 #'   "idw" (Inverse Distance Weighting).
 #' @importFrom stats loess
 #'
-#' @return An `SpatRaster` object with the same extend and crs from `mosaic`
+#' @return An `SpatRaster` object with the same extent and crs from `mosaic`
 #' @export
 #'
 mosaic_interpolate <- function(mosaic, points, method = c("bilinear", "loess", "idw")){
@@ -179,7 +186,10 @@ mosaic_interpolate <- function(mosaic, points, method = c("bilinear", "loess", "
     terra::crs(points) <- terra::crs(mosaic)
   }
   if(!method[[1]] %in% c("bilinear", "idw", "loess")){
-    stop("'method' must be one of 'bilinear', 'loess', or 'idw'")
+    cli::cli_abort(c(
+      "x" = "`method` must be one of {.val bilinear}, {.val loess}, or {.val idw}."
+    ))
+
   }
   if(method[[1]]  %in%  c("bilinear", "loess")){
     linear_iterpolation(mosaic, points, method = method[[1]])
@@ -279,7 +289,7 @@ mosaic_interpolate <- function(mosaic, points, method = c("bilinear", "loess", "
 #'   and columns, respectively) for creating a DTM using a moving window.
 #'   Default is c(5, 5).
 #' @param simplify Removes vertices in polygons to form simpler shapes. The
-#'   function implementation uses the Douglas–Peucker algorithm using
+#'   function implementation uses the Douglas-Peucker algorithm using
 #'   [sf::st_simplify()] for simplification.
 #' @param map_individuals If `TRUE`, the distance between objects within plots
 #'   is computed. The distance can be mapped either in the horizontal or vertical
@@ -422,10 +432,21 @@ mosaic_analyze <- function(mosaic,
                            quantiles = c(0, 1),
                            plot = TRUE,
                            verbose = TRUE){
+  if(verbose){
+    cli::cli_rule(
+      left = cli::col_blue("Analyzing the mosaic"),
+      right = cli::col_blue("Started on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+    )
+  }
   if(!is.null(dsm)){
     dsm <- align_dsm(dsm, mosaic)
     if(verbose){
-      message("\014","\nCreating the mask based on the digital surface model...\n")
+      msg <- "Creating the mask based on the digital surface model..."
+      cli::cli_progress_step(
+        msg = msg,
+        msg_done = sub("\\.\\.\\.$", "", msg),
+        msg_failed = "Mask creation failed"
+      )
     }
     mask <- mosaic_chm_mask(dsm, lower = dsm_lower, upper = dsm_upper, window_size = dsm_window_size)
   }
@@ -436,7 +457,7 @@ mosaic_analyze <- function(mosaic,
   }
   if(!is.null(indexes)){
     if(!inherits(indexes, "SpatRaster")){
-      stop("Object `indexes` must be an object of class `SpatRaster`.")
+      cli::cli_abort("Object {.arg indexes} must be an object of class `SpatRaster`.")
     } else{
       plot_index <- names(indexes)
     }
@@ -454,10 +475,15 @@ mosaic_analyze <- function(mosaic,
     terra::crs(mosaic) <- terra::crs("EPSG:4326")
   }
   nlyrs <- terra::nlyr(mosaic)
-  if(verbose){
-    message("\014","\nBuilding the mosaic...\n")
-  }
   if(is.null(basemap)){
+    if(verbose){
+      msg <- "Building the basemap..."
+      cli::cli_progress_step(
+        msg = msg,
+        msg_done = sub("\\.\\.\\.$", "", msg),
+        msg_failed = "Basemap creation failed"
+      )
+    }
     basemap <-
       suppressWarnings(
         mosaic_view(mosaic,
@@ -476,6 +502,14 @@ mosaic_analyze <- function(mosaic,
       )
   }
   if(is.null(shapefile)){
+    if(verbose){
+      msg <- "Building the shapefiles..."
+      cli::cli_progress_step(
+        msg = msg,
+        msg_done = sub("\\.\\.\\.$", "", msg),
+        msg_failed = "Shapefile creation failed"
+      )
+    }
     created_shapes <-
       suppressWarnings(
         shapefile_build(mosaic,
@@ -493,12 +527,20 @@ mosaic_analyze <- function(mosaic,
                         buffer_col = buffer_col,
                         buffer_row = buffer_row,
                         max_pixels = max_pixels,
-                        verbose = verbose,
+                        verbose = FALSE,
                         downsample = downsample,
                         quantiles = quantiles)
       )
     # crop to the analyzed area
     if(crop_to_shape_ext){
+      if(verbose){
+        msg <- "Cropping the mosaic to the shapefile extent..."
+        cli::cli_progress_step(
+          msg = msg,
+          msg_done = sub("\\.\\.\\.$", "", msg),
+          msg_failed = "Mosaic cropping failed"
+        )
+      }
       ress <- terra::res(mosaic)
       if(sum(ress) != 2){
         poly_ext <-
@@ -532,11 +574,19 @@ mosaic_analyze <- function(mosaic,
         created_shapes <- sf::st_as_sf(shapefile) |> sf_to_polygon()
       }
       if(!"block" %in% colnames(shapefile)){
-        stop("`block` and `plot_id` must be in the column names of shapefile")
+        cli::cli_abort("{.arg block} and {.arg plot_id} must be in the column names of shapefile")
       }
       created_shapes <- split(shapefile, shapefile$block)
     }
     if(crop_to_shape_ext){
+      if(verbose){
+        msg <- "Cropping the mosaic to the shapefile extent..."
+        cli::cli_progress_step(
+          msg = msg,
+          msg_done = sub("\\.\\.\\.$", "", msg),
+          msg_failed = "Mosaic cropping failed"
+        )
+      }
       ress <- terra::res(mosaic)
       if(sum(ress) != 2){
         poly_ext <-
@@ -591,12 +641,14 @@ mosaic_analyze <- function(mosaic,
     topn_upper <- validate_and_replicate(topn_upper, created_shapes, verbose = verbose)
   }
   #
-
-
-
   if(is.null(indexes)){
     if(verbose){
-      message("\014","\nComputing the indexes...\n")
+      msg <- "Computing vegetation indexes..."
+      cli::cli_progress_step(
+        msg = msg,
+        msg_done = sub("\\.\\.\\.$", "", msg),
+        msg_failed = "Index computation failed"
+      )
     }
     if(nlyrs > 1 | !all(plot_index %in% names(mosaiccr))){
       mind <- terra::rast(
@@ -622,13 +674,13 @@ mosaic_analyze <- function(mosaic,
   } else{
     mind <- indexes
     if(!all(segment_index %in% names(mind))){
-      stop("`segment_index` must be present in `indexes`")
+      cli::cli_warn("{.val segment_index} must be present in `indexes`")
     }
   }
 
   results <- list()
   result_indiv <- list()
-  extends <- terra::ext(mosaiccr)
+  extents <- terra::ext(mosaiccr)
   usepickmask <- segment_pick & (segment_individuals[[1]] | segment_plot[[1]])
   if(usepickmask){
     if(build_shapefile & is.null(shapefile)){
@@ -648,12 +700,20 @@ mosaic_analyze <- function(mosaic,
   if(ihaveamask){
     mask <- mask
   }
+  if(verbose){
+    cli::cli_progress_bar(
+      format = "{cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta}",
+      total = length(created_shapes),
+      clear = FALSE
+    )
+  }
   for(j in seq_along(created_shapes)){
-    if(segment_plot[j] & segment_individuals[j]){
-      stop("Only `segment_plot` OR `segment_individuals` can be used", call. = FALSE)
-    }
     if(verbose){
-      message("\014","\nExtracting data from block ", j, "\n")
+      cli::cli_h2("Analyzing block {.val {j}}")
+      cli::cli_progress_update()
+      if(segment_plot[j] & segment_individuals[j]){
+        cli::cli_abort("Only {.arg segment_plot} OR {.arg segment_individuals} can be used")
+      }
     }
     if(inherits(created_shapes[[j]]$geometry, "sfc_POLYGON") & nrow(sf::st_coordinates(created_shapes[[j]]$geometry[[1]])) == 5 & grid[[j]]){
       plot_grid <- created_shapes[[j]]
@@ -678,15 +738,23 @@ mosaic_analyze <- function(mosaic,
       } else{
         mind_temp <- mind
       }
-      extends <- terra::ext(mind_temp)
+      extents <- terra::ext(mind_temp)
       if(segment_plot[j]){
+        if(verbose){
+          msg <- "Masking vegetation from ground..."
+          cli::cli_progress_step(
+            msg        = msg,
+            msg_done   = "Vegetation masking completed",
+            msg_failed = "Failed to mask vegetation from ground"
+          )
+        }
         if(usepickmask | ihaveamask){
           if(crop_to_shape_ext){
             mask <- terra::crop(mask, terra::ext(ext_anal))
           }
         } else{
           if(!segment_index[j] %in% names(mind_temp)){
-            stop("`segment_index` must be one of used in `plot_index`.")
+            cli::cli_abort("{.arg segment_index} must be one of used in `plot_index`.")
           }
           thresh <- ifelse(threshold[j] == "Otsu", otsu(na.omit(terra::values(mind_temp)[, segment_index[j]])), threshold[j])
           if(invert[j]){
@@ -721,6 +789,14 @@ mosaic_analyze <- function(mosaic,
 
       # check if segmentation is performed (analyze individuals)
       if(segment_individuals[j]){
+        if(verbose){
+          msg <- "Segmenting individuals within plots..."
+          cli::cli_progress_step(
+            msg        = msg,
+            msg_done = sub("\\.\\.\\.$", "", msg),
+            msg_failed = "Segmentation failed"
+          )
+        }
         if(usepickmask | ihaveamask){
           if(crop_to_shape_ext){
             mask <- terra::crop(mask, terra::ext(ext_anal))
@@ -763,8 +839,8 @@ mosaic_analyze <- function(mosaic,
         sf_df <- sf::st_sf(
           geometry = lapply(conts, function(x) {
             tmp <- x
-            tmp[, 2] <-  extends[3] + (nrow(mask) - tmp[, 2]) * resy
-            tmp[, 1] <- extends[1] + tmp[, 1] * resy
+            tmp[, 2] <-  extents[3] + (nrow(mask) - tmp[, 2]) * resy
+            tmp[, 1] <- extents[1] + tmp[, 1] * resy
             geometry = sf::st_polygon(list(as.matrix(tmp |> poly_close())))
           }),
           data = data.frame(individual = paste0(1:length(conts))),
@@ -805,7 +881,7 @@ mosaic_analyze <- function(mosaic,
 
         # control noise removing
         if(!is.null(lower_size[j]) & !is.null(topn_lower[j]) | !is.null(upper_size[j]) & !is.null(topn_upper[j])){
-          stop("Only one of 'lower_*' or 'topn_*' can be used.")
+          cli::cli_abort("Only one of {.arg lower_* or} {.arg topn_*} can be used.")
         }
         ifelse(!is.null(lower_size[j]),
                gridindiv <- gridindiv[gridindiv$area > lower_size[j], ],
@@ -819,6 +895,14 @@ mosaic_analyze <- function(mosaic,
         }
         if(!is.null(topn_upper[j])){
           gridindiv <- gridindiv[order(gridindiv$area, decreasing = TRUE),][1:topn_upper[j],]
+        }
+        if(verbose){
+          msg <- "Extracting features from segmented individuals..."
+          cli::cli_progress_step(
+            msg        = msg,
+            msg_done = sub("\\.\\.\\.$", "", msg),
+            msg_failed = "Feature extraction failed"
+          )
         }
 
         valindiv <-
@@ -882,6 +966,14 @@ mosaic_analyze <- function(mosaic,
       if(!is.null(mask) & (!segment_individuals[[1]] & !segment_plot[[1]])){
         mind_temp <- terra::mask(mind_temp, mask, maskvalues = TRUE)
       }
+      if(verbose){
+        msg <- "Extracting plot-level features..."
+        cli::cli_progress_step(
+          msg        = msg,
+          msg_done = sub("\\.\\.\\.$", "", msg),
+          msg_failed = "Feature extraction of plots failed"
+        )
+      }
       vals <-
         exactextractr::exact_extract(x = mind_temp,
                                      y = plot_grid,
@@ -909,7 +1001,7 @@ mosaic_analyze <- function(mosaic,
       } else{
         mind_temp <- mind
       }
-      extends <- terra::ext(mind_temp)
+      extents <- terra::ext(mind_temp)
       if(segment_plot[j]){
         if(usepickmask | ihaveamask){
           if(crop_to_shape_ext){
@@ -917,7 +1009,7 @@ mosaic_analyze <- function(mosaic,
           }
         } else{
           if(!segment_index[j] %in% names(mind_temp)){
-            stop("`segment_index` must be one of used in `plot_index`.")
+            cli::cli_abort("{.arg segment_index} must be one of used in `plot_index`.")
           }
           thresh <- ifelse(threshold[j] == "Otsu", otsu(na.omit(terra::values(mind_temp)[, segment_index[j]])), threshold[j])
           if(invert[j]){
@@ -950,6 +1042,14 @@ mosaic_analyze <- function(mosaic,
       }
 
       if(segment_individuals[j]){
+        if(verbose){
+          msg <- "Segmenting individuals..."
+          cli::cli_progress_step(
+            msg        = msg,
+            msg_done = sub("\\.\\.\\.$", "", msg),
+            msg_failed = sub("\\.\\.\\.$", "", msg)
+          )
+        }
         if(usepickmask | ihaveamask){
           if(crop_to_shape_ext){
             mask <- terra::crop(mask, terra::ext(ext_anal))
@@ -963,7 +1063,7 @@ mosaic_analyze <- function(mosaic,
           }
         }
         dmask <- EBImage::Image(matrix(matrix(mask), ncol = nrow(mind_temp), nrow = ncol(mind_temp)))
-        extends <- terra::ext(mind_temp)
+        extents <- terra::ext(mind_temp)
         dmask[is.na(dmask) == TRUE] <- 1
         if(!isFALSE(filter[j]) & filter[j] > 1){
           dmask <- EBImage::medianFilter(dmask, filter[j])
@@ -992,8 +1092,8 @@ mosaic_analyze <- function(mosaic,
         sf_df <- sf::st_sf(
           geometry = lapply(conts, function(x) {
             tmp <- x
-            tmp[, 2] <-  extends[3] + (nrow(mask) - tmp[, 2]) * resy
-            tmp[, 1] <- extends[1] + tmp[, 1] * resy
+            tmp[, 2] <-  extents[3] + (nrow(mask) - tmp[, 2]) * resy
+            tmp[, 1] <- extents[1] + tmp[, 1] * resy
             geometry = sf::st_polygon(list(as.matrix(tmp |> poly_close())))
           }),
           data = data.frame(individual = paste0(1:length(conts))),
@@ -1021,7 +1121,7 @@ mosaic_analyze <- function(mosaic,
 
         # control noise removing
         if(!is.null(lower_size[j]) & !is.null(topn_lower[j]) | !is.null(upper_size[j]) & !is.null(topn_upper[j])){
-          stop("Only one of 'lower_*' or 'topn_*' can be used.")
+          cli::cli_abort("Only one of {.arg lower_*} or {.arg topn_*} can be used.")
         }
         ifelse(!is.null(lower_size[j]),
                gridindiv <- gridindiv[gridindiv$area > lower_size[j], ],
@@ -1035,7 +1135,14 @@ mosaic_analyze <- function(mosaic,
         if(!is.null(topn_upper[j])){
           gridindiv <- gridindiv[order(gridindiv$area, decreasing = TRUE),][1:topn_upper[j],]
         }
-
+        if(verbose){
+          msg <- "Extracting plant-level features..."
+          cli::cli_progress_step(
+            msg        = msg,
+            msg_done = sub("\\.\\.\\.$", "", msg),
+            msg_failed = sub("\\.\\.\\.$", "", msg)
+          )
+        }
         valindiv <-
           exactextractr::exact_extract(x = mind_temp,
                                        y = gridindiv,
@@ -1095,6 +1202,14 @@ mosaic_analyze <- function(mosaic,
       if(!is.null(mask) & (!segment_individuals[[1]] & !segment_plot[[1]])){
         mind_temp <- terra::mask(mind_temp, mask, maskvalues = TRUE)
       }
+      if(verbose){
+        msg <- "Extracting plot-level features..."
+        cli::cli_progress_step(
+          msg        = msg,
+          msg_done = sub("\\.\\.\\.$", "", msg),
+          msg_failed = sub("\\.\\.\\.$", "", msg)
+        )
+      }
       vals <-
         exactextractr::exact_extract(x = mind_temp,
                                      y = plot_grid,
@@ -1105,6 +1220,14 @@ mosaic_analyze <- function(mosaic,
                                      summarize_df = ifelse(is.function(summarize_fun), TRUE, FALSE))
     }
     # bind the results
+    if(verbose){
+      msg <- "Binding the extracted features..."
+      cli::cli_progress_step(
+        msg        = msg,
+        msg_done = sub("\\.\\.\\.$", "", msg),
+        msg_failed = sub("\\.\\.\\.$", "", msg)
+      )
+    }
     if(inherits(vals, "list")){
       names(vals) <- paste0(plot_grid$block, "_", plot_grid$plot_id)
       vals <- dplyr::bind_rows(vals, .id = "plot") |> pliman::separate_col(plot, c("block", "plot_id"))
@@ -1136,12 +1259,19 @@ mosaic_analyze <- function(mosaic,
 
 
   # bind the results  ## at a level plot
+  if(verbose){
+    msg <- "Summarizing the results..."
+    cli::cli_progress_step(
+      msg        = msg,
+      msg_done = sub("\\.\\.\\.$", "", msg),
+      msg_failed = sub("\\.\\.\\.$", "", msg)
+    )
+  }
+
   results <- dplyr::bind_rows(results) |> sf::st_sf()
-  # return(list(results = results, result_indiv = result_indiv))
   if(any(segment_individuals)){
     result_indiv <- do.call(rbind, result_indiv)
     blockid <- unique(result_indiv$block)
-
 
     summres <-
       lapply(1:length(blockid), function(i){
@@ -1204,6 +1334,14 @@ mosaic_analyze <- function(mosaic,
       dplyr::relocate(x, y, .after = individual)
 
     if(map_individuals){
+      if(verbose){
+        msg <- "Mapping individuals within plots..."
+        cli::cli_progress_step(
+          msg        = msg,
+          msg_done = sub("\\.\\.\\.$", "", msg),
+          msg_failed = sub("\\.\\.\\.$", "", msg)
+        )
+      }
       dists <-
         result_indiv |>
         sf::st_drop_geometry() |>
@@ -1231,7 +1369,6 @@ mosaic_analyze <- function(mosaic,
       result_individ_map <- NULL
     }
 
-
   } else{
     result_plot_summ <- NULL
     result_indiv <- NULL
@@ -1240,9 +1377,6 @@ mosaic_analyze <- function(mosaic,
   }
 
   if(isTRUE(plot)){
-    if(verbose){
-      message("\014","\nPreparing to plot...\n")
-    }
     downsample <- find_aggrfact(mosaiccr, max_pixels = max_pixels)
     if(downsample > 0){
       mosaiccr <- mosaic_aggregate(mosaiccr, pct = round(100 / downsample))
@@ -1310,7 +1444,10 @@ mosaic_analyze <- function(mosaic,
     mapindivid <- NULL
   }
   if(verbose){
-    message("\014","Done!\n")
+    cli::cli_rule(
+      left = cli::col_blue("Mosaic successfully analyzed"),
+      right = cli::col_blue("Finished on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+    )
   }
   return(list(result_plot = results,
               result_plot_summ = result_plot_summ,
@@ -1333,6 +1470,7 @@ mosaic_analyze <- function(mosaic,
 #' that specific analysis, sacrificing some detail for faster processing.
 #'
 #' @inheritParams mosaic_analyze
+#' @inheritParams analyze_objects
 #' @param ... Further arguments passed on to [mosaic_analyze()]
 #'
 #' @return A list containing the following objects:
@@ -1371,31 +1509,110 @@ mosaic_analyze_iter <- function(mosaic,
                                 color_regions = rev(grDevices::terrain.colors(50)),
                                 alpha = 0.75,
                                 quantiles = c(0, 1),
+                                parallel = FALSE,
+                                workers = NULL,
                                 ...){
   pind <- unique(c(plot_index, segment_index))
   if(is.null(attribute)){
     attribute <- paste(summarize_fun, pind[[1]], sep = ".")
   }
-  bind <- list()
-  for (i in 1:nrow(shapefile)) {
-    if(verbose){
-      message("\014","\nAnalyzing plot", i, "\n")
+  shapefile <- shapefile_input(shapefile, info = FALSE)
+
+  if(terra::inMemory(mosaic)){
+    tf <- paste0(tempfile(), ".tif")
+    on.exit(file.remove(tf))
+    terra::writeRaster(mosaic, filename = tf)
+    tempf <- tf
+  } else{
+    tempf <- terra::sources(mosaic)
+  }
+  rast_file <- terra::rast(tempf)
+  if (verbose) {
+    cli::cli_progress_step(
+      msg = "Clipping mosaic plots to temporary files...",
+      msg_done = "Clipping done.",
+      msg_failed = "Oops, something went wrong."
+    )
+  }
+
+  tempfiles <- mosaic_clip(mosaic, shapefile, out_dir = tempdir(), verbose = FALSE, overwrite = TRUE)
+  on.exit(unlink(tempfiles), add = TRUE)
+
+  if(parallel){
+    nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores() * 0.4), workers)
+    mirai::daemons(nworkers)
+    on.exit(mirai::daemons(0))
+
+    if (verbose) {
+      cli::cli_rule(
+        left = cli::col_blue("Parallel processing using {nworkers} cores"),
+        right = cli::col_blue("Started on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+      )
+      cli::cli_progress_step(
+        msg        = "Initializing {.strong {nworkers}} Mirai workers for parallel processing...",
+        msg_done   = "Parallel environment configured",
+        msg_failed = "{.cross} Failed to initialize workers: {.emph {err$message}}"
+      )
     }
-    bind[[paste0("P", leading_zeros(i, 4))]] <-
-      mosaic_analyze(terra::crop(mosaic, terra::vect(shapefile$geometry[[i]]) |> terra::ext()),
-                     basemap = basemap,
-                     r = r, g = g, b = b, re = re, nir = nir, swir = swir, tir = tir,
-                     shapefile = shapefile[i, ],
-                     segment_individuals = segment_individuals,
-                     segment_index = segment_index,
-                     segment_plot = segment_plot,
-                     plot_index = pind,
-                     build_shapefile = FALSE,
-                     plot = FALSE,
-                     grid = FALSE,
-                     verbose = FALSE,
-                     crop_to_shape_ext = TRUE,
-                     ...)
+    shapes <- split(shapefile, seq_len(nrow(shapefile)))
+    worker_fun <- function(path, shp) {
+      terra::rast(path) |>
+        pliman::mosaic_analyze(shapefile = shp,
+                               basemap               = NULL,
+                               r                     = r, g = g, b = b,
+                               re = re, nir = nir, swir = swir, tir = tir,
+                               segment_individuals   = segment_individuals,
+                               segment_index         = segment_index,
+                               segment_plot          = segment_plot,
+                               plot_index            = pind,
+                               build_shapefile       = FALSE,
+                               plot                  = FALSE,
+                               grid                  = FALSE,
+                               verbose               = FALSE,
+                               crop_to_shape_ext     = FALSE,
+                               ...)
+    }
+
+    bind <-
+      mirai::mirai_map(
+        seq_along(tempfiles),
+        function(i){worker_fun(tempfiles[i], shapes[[i]])}
+      )[.progress]
+    # return(bind)
+
+  } else{
+    bind <- list()
+    if(verbose){
+      cli::cli_rule(
+        left = cli::col_blue("Analyzing the mosaic by plot using a sequential approach"),
+        right = cli::col_blue("Started on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+      )
+      cli::cli_progress_bar(
+        format = "{cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta}",
+        total  = nrow(shapefile),
+        clear  = FALSE
+      )
+    }
+    for (i in seq_along(tempfiles)) {
+      if(verbose){
+        cli::cli_progress_update()
+      }
+      bind[[paste0("P", leading_zeros(i, 4))]] <-
+        mosaic_analyze(terra::rast(tempfiles[[i]]),
+                       basemap = basemap,
+                       r = r, g = g, b = b, re = re, nir = nir, swir = swir, tir = tir,
+                       shapefile = shapefile[i, ],
+                       segment_individuals = segment_individuals,
+                       segment_index = segment_index,
+                       segment_plot = segment_plot,
+                       plot_index = pind,
+                       build_shapefile = FALSE,
+                       plot = FALSE,
+                       grid = FALSE,
+                       verbose = FALSE,
+                       crop_to_shape_ext = FALSE,
+                       ...)
+    }
   }
   if(is.null(bind[[1]]$result_individ_map)){
     result_individ_map <- NULL
@@ -1440,9 +1657,6 @@ mosaic_analyze_iter <- function(mosaic,
 
 
   if(isTRUE(plot)){
-    if(verbose){
-      message("\014","\nPreparing to plot...\n")
-    }
     if(is.null(basemap)){
       if(terra::nlyr(mosaic) < 3){
         basemap <-
@@ -1514,9 +1728,13 @@ mosaic_analyze_iter <- function(mosaic,
     map <- NULL
     mapindivid <- NULL
   }
-  if(verbose){
-    message("\014","\nDone", i, "\n")
+  if (verbose) {
+    cli::cli_rule(
+      left = cli::col_blue("Features successfully extracted"),
+      right = cli::col_blue("Finished on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+    )
   }
+
   return(list(result_plot = result_plot,
               result_plot_summ = result_plot_summ,
               result_indiv = result_indiv,
@@ -1617,7 +1835,7 @@ mosaic_view <- function(mosaic,
     mosaic <- terra::rast(EBImage::transpose(mosaic)@.Data)
   }
   if(viewopt == "rgb" & vieweropt == "base" & terra::nlyr(mosaic) > 1){
-    message("`viewer = 'base' can only be used with `show = 'index'`. Defaulting to viewer = 'mapview'")
+    cli::cli_warn("{.arg viewer = 'base'} can only be used with {.arg show = 'index'}. Defaulting to {.arg viewer = 'mapview'}")
     vieweropt <- "mapview"
   }
   if(terra::crs(mosaic) == ""){
@@ -1627,14 +1845,17 @@ mosaic_view <- function(mosaic,
   nr <- dimsto[1]
   nc <- dimsto[2]
 
-  if(max_pixels > 2000000){
-    message("The number of pixels is too high, which might slow the rendering process.")
+  if (max_pixels > 2000000) {
+    cli::cli_inform(c("i" = "The number of pixels is {.strong very high}, which might slow the rendering process."))
   }
+
   dwspf <- find_aggrfact(mosaic, max_pixels = max_pixels)
-  if(dwspf > 0 & is.null(downsample)){
-    message(paste0("Using downsample = ", dwspf, " so that the number of rendered pixels approximates the `max_pixels`"))
+
+  if (dwspf > 0 && is.null(downsample)) {
+    cli::cli_inform(c("i" = "Using {.code downsample = {dwspf}} to match the {.field max_pixels} constraint."))
     mosaic <- mosaic_aggregate(mosaic, pct = round(100 / dwspf), fun = downsample_fun)
   }
+
   if(viewopt == "index" & terra::nlyr(mosaic) > 2){
     mosaic <- mosaic_index(mosaic, index = index, plot = FALSE)
   }
@@ -1642,12 +1863,12 @@ mosaic_view <- function(mosaic,
     if(terra::nlyr(mosaic) > 2){
       if(is.null(shapefile)){
         map <-
-          mapview::viewRGB(as(mosaic, "Raster"),
+          mapview::viewRGB(as(mosaic[[c(r, g, b)]], "Raster"),
                            na.color = "#00000000",
                            layer.name = "base",
-                           r = r,
-                           g = g,
-                           b = b,
+                           r = 1,
+                           g = 2,
+                           b = 3,
                            maxpixels = 60000000,
                            quantiles = quantiles)
         if(edit){
@@ -1658,12 +1879,12 @@ mosaic_view <- function(mosaic,
         }
         map
       } else{
-        mapview::viewRGB(as(mosaic, "Raster"),
+        mapview::viewRGB(as(mosaic[[c(r, g, b)]], "Raster"),
                          na.color = "#00000000",
                          layer.name = "base",
-                         r = r,
-                         g = g,
-                         b = b,
+                         r = 1,
+                         g = 2,
+                         b =3,
                          maxpixels = 60000000,
                          quantiles = quantiles) +
           suppressWarnings(
@@ -1791,7 +2012,7 @@ mosaic_view <- function(mosaic,
 #'    array or a list of `SpatRaster` objects.
 #'  * For `mosaic_export()`, an `SpatRaster` object.
 #' @param mosaic_pattern A pattern name to import multiple mosaics into a list.
-#' @param info Print the mosaic informations (eg., CRS, extend). Defaults to `TRUE`
+#' @param info Print the mosaic informations (eg., CRS, extent). Defaults to `TRUE`
 #' @param check_16bits Checks if mosaic has maximum value in the 16-bits format
 #'   (65535), and replaces it by NA. Defaults to `FALSE`.
 #' @param check_datatype Logical. If \code{TRUE}, checks and suggests the
@@ -1829,6 +2050,11 @@ mosaic_input <- function(mosaic,
                          check_16bits = FALSE,
                          check_datatype = FALSE,
                          ...){
+  if(file_extension(mosaic) %in% c("jpg", "jpeg", "png")){
+    flip <- TRUE
+  } else{
+    flip <- FALSE
+  }
   if(!is.null(mosaic_pattern)){
     if(mosaic_pattern %in% c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")){
       mosaic_pattern <- "^[0-9].*$"
@@ -1836,9 +2062,11 @@ mosaic_input <- function(mosaic,
     path <- getwd()
     imgs <- list.files(pattern = mosaic_pattern, path)
     if(length(grep(mosaic_pattern, imgs)) == 0){
-      stop(paste("'", mosaic_pattern, "' mosaic_pattern not found in '",
-                 paste0(dir)),
-           call. = FALSE)
+      cli::cli_abort(c(
+        "!" = "The specified {.arg mosaic_pattern} was not found.",
+        "x" = "Pattern {.val {mosaic_pattern}} not found in directory {.path {dir}}."
+      ))
+
     }
     list_img <-
       lapply(imgs, function(x){
@@ -1849,13 +2077,20 @@ mosaic_input <- function(mosaic,
   } else{
     mosaic <- suppressWarnings(terra::rast(mosaic, ...))
     if(terra::crs(mosaic) == ""){
-      message("Missing Coordinate Reference System. Setting to EPSG:3857")
+      cli::cli_alert_info("Missing Coordinate Reference System. Setting to EPSG:3857")
       terra::crs(mosaic) <- terra::crs("EPSG:3857")
     }
-    if(terra::is.lonlat(mosaic)){
-      eps <- mosaic_epsg(mosaic)
-      warning(paste0("The current raster is in the lat/lon coordinate system, which may result in processing errors when trying to segment individuals in the `mosaic_analyze()` function. It is highly suggested to reproject the raster using mosaic_project() with ", eps), call. = FALSE)
+    if(flip){
+      mosaic <- mosaic_rotate(mosaic, 180, "anticlockwise")
     }
+    if (terra::is.lonlat(mosaic)) {
+      eps <- mosaic_epsg(mosaic)
+      cli::cli_warn(c(
+        "!" = "The current raster is in a {.emph lat/lon} coordinate system, which may lead to processing errors in {.fn mosaic_analyze()}.",
+        "i" = "It is highly recommended to reproject the raster using {.fn mosaic_project()} with {.val {eps}}."
+      ))
+    }
+
     if(check_16bits | check_datatype){
       cels <- sample(1:terra::ncell(mosaic), 2000, replace = TRUE)
       a <- na.omit(unlist(terra::extract(mosaic, cels)))
@@ -1874,10 +2109,14 @@ mosaic_input <- function(mosaic,
             datatype <- "FLT4S"
           }
           dtterra <- terra::datatype(mosaic)[[1]]
-          if(datatype != dtterra){
-            warning(paste("Based on the mosaic values, the datatype should be", datatype, "but it is ", dtterra,
-                          ". Consider exporting it with `mosaic_export()` to assign the suggested datatype, which can save file size and memory usage during index computation. "))
+          if (datatype != dtterra) {
+            cli::cli_warn(c(
+              "!" = "The detected datatype is {.val {dtterra}}, but the suggested datatype is {.val {datatype}}.",
+              "i" = "Consider using {.fn mosaic_export()} to convert the datatype.",
+              "i" = "Using the suggested datatype may reduce file size and improve memory efficiency during index computation."
+            ))
           }
+
         }
         if(check_16bits){
           if(max(suppressWarnings(terra::minmax(mosaic)), na.rm = TRUE) == 65535){
@@ -1917,7 +2156,8 @@ mosaic_export <- function(mosaic,
       datatype <- "FLT4S"
     }
   }
-  message(paste0("Exporting the mosaic using datatype = ", datatype))
+  cli::cli_inform("Exporting the mosaic using {.arg datatype} = {.val {datatype}}.")
+
   terra::writeRaster(mosaic,
                      filename = filename,
                      overwrite = overwrite,
@@ -2054,7 +2294,8 @@ mosaic_plot <- function(mosaic,
                         smooth = TRUE,
                         ...){
   if(!inherits(mosaic, "SpatRaster")){
-    stop("'mosaic' must be an object of class 'SpatRaster'")
+    cli::cli_abort("{.arg mosaic} must be an object of class {.cls SpatRaster}.")
+
   }
   terra::plot(mosaic,
               col = col,
@@ -2082,7 +2323,7 @@ mosaic_plot <- function(mosaic,
 #' }
 mosaic_hist <- function(mosaic, layer, ...){
   if(!inherits(mosaic, "SpatRaster")){
-    stop("'mosaic' must be an object of class 'SpatRaster'")
+    cli::cli_abort("{.arg mosaic} must be an object of class {.cls SpatRaster}.")
   }
   terra::hist(mosaic, layer, ...)
 }
@@ -2099,51 +2340,62 @@ mosaic_hist <- function(mosaic, layer, ...){
 #'
 mosaic_plot_rgb <- function(mosaic, ...){
   if(!inherits(mosaic, "SpatRaster")){
-    stop("'mosaic' must be an object of class 'SpatRaster'")
+    cli::cli_abort("{.arg mosaic} must be an object of class {.cls SpatRaster}.")
   }
   terra::plotRGB(mosaic, ...)
 }
 
 
-#' Crop a mosaic
+#' Crop or Mask a Mosaic Raster
 #'
-#' Crop a `SpatRaster` object based on user-defined selection using an
-#' interactive map or plot.
+#' Crop or mask a `SpatRaster` object (`mosaic`) based on user input from an
+#' interactive map or by using a provided shapefile or another raster.
 #'
-#' @details This function uses the `mosaic_view` function to display an
-#'   interactive map or plot of the mosaic raster, allowing users to draw a
-#'   rectangle to select the cropping area. The selected area is then cropped
-#'   from the input mosaic and returned as a new `SpatRaster` object. If
-#'   `shapefile` is declared, the mosaic will be cropped to the extent of
-#'   `shapefile`.
-#' @importFrom terra crs
-#' @inheritParams mosaic_view
-#' @inheritParams mosaic_index
-#' @param r,g,b,re,nir The red, green, blue, red-edge, and  near-infrared bands
-#'   of the image, respectively. By default, the function assumes a BGR as input
-#'   (b = 1, g = 2, r = 3). If a multispectral image is provided up to seven
-#'   bands can be used to compute built-in indexes. There are no limitation of
-#'   band numbers if the index is computed using the band name.
-#' @param shapefile An optional `SpatVector`, that can be created with
-#'   [shapefile_input()].
-#' @param buffer A buffering factor to be used when a shapefile is used to crop
-#'   the mosaic.
+#' @description
+#' This function allows cropping of a raster mosaic interactively or programmatically:
+#'
+#' - **Interactive Mode**: If neither `shapefile` nor `mosaic2` is provided, an interactive map
+#'   is shown via [mosaic_view()], allowing users to draw a rectangle to define the cropping area.
+#' - **Shapefile Mode**: If a `SpatVector` is provided in `shapefile`, cropping or masking is performed
+#'   based on its extent or exact shape, optionally with a buffer.
+#' - **Raster Mode**: If `mosaic2` is provided, `mosaic` will be cropped to match the extent of `mosaic2`.
+#'
+#' For disk-based mosaics, cropping with shapefiles uses GDAL (`sf::gdal_utils()`) to improve efficiency.
+#'
+#' @param mosaic A `SpatRaster` object to be cropped.
+#' @param r,g,b,re,nir Integer indices representing the red, green, blue, red-edge, and near-infrared
+#'   bands of the input mosaic. Default assumes BGR format (b = 1, g = 2, r = 3).
+#' @param shapefile An optional `SpatVector` (or `sf` object) to use as cropping/masking geometry.
+#'   Can be created interactively with [shapefile_input()].
+#' @param mosaic2 A second `SpatRaster` whose extent will be used to crop `mosaic`.
+#' @param buffer A numeric value indicating a buffer (in CRS units) to apply around the shapefile geometry.
+#' @param in_memory Logical. If `TRUE`, raster processing will occur entirely in memory using `terra`.
+#'   If `FALSE` (default), disk-based processing with GDAL will be used when appropriate.
+#' @param show A character value indicating what to display in the interactive viewer. Either `"rgb"` or `"index"`.
+#' @param index The index to show if `show = "index"`. Default is `"R"`.
+#' @param max_pixels Maximum number of pixels to render in the interactive viewer.
+#' @param downsample Optional downsampling factor for display purposes.
+#' @param type Either `"crop"` (default) or `"mask"`:
+#'   - `"crop"` crops the mosaic to the bounding box of the shapefile.
+#'   - `"mask"` sets pixels outside the shapefile geometry to `NA` (recommended when using exact shapes).
 #' @param ... Additional arguments passed to [mosaic_view()].
 #'
-#' @return A cropped version of `mosaic` based on the user-defined selection.
+#' @return A cropped or masked `SpatRaster` object.
 #' @export
 #'
 #' @examples
 #' if (interactive() && requireNamespace("EBImage")) {
-#' library(pliman)
-#' # Load a raster showing the elevation of Luxembourg
-#' mosaic <- mosaic_input(system.file("ex/elev.tif", package="terra"))
+#'   library(pliman)
+#'   # Load a sample raster
+#'   mosaic <- mosaic_input(system.file("ex/elev.tif", package = "terra"))
 #'
-#' # Generate an interactive map using 'mapview' (works only in an interactive section)
-#' cropped <- mosaic_crop(mosaic)
-#' mosaic_view(cropped)
+#'   # Interactive cropping with drawn rectangle
+#'   cropped <- mosaic_crop(mosaic)
+#'
+#'   # View result
+#'   mosaic_view(cropped)
 #' }
-#'
+
 mosaic_crop <- function(mosaic,
                         r = 3,
                         g = 2,
@@ -2151,13 +2403,16 @@ mosaic_crop <- function(mosaic,
                         re = 4,
                         nir = 5,
                         shapefile = NULL,
+                        in_memory = FALSE,
+                        mosaic2 = NULL,
                         buffer = 0,
                         show = c("rgb", "index"),
                         index = "R",
                         max_pixels = 500000,
                         downsample = NULL,
+                        type = c("crop", "mask"),
                         ...){
-  if(is.null(shapefile)){
+  if(is.null(shapefile) & is.null(mosaic2)){
     showopt <- c("rgb", "index")
     showopt <- showopt[pmatch(show[[1]], showopt)]
     controls <- mosaic_view(mosaic,
@@ -2173,6 +2428,7 @@ mosaic_crop <- function(mosaic,
                             edit = TRUE,
                             title = "Use the 'Draw rectangle' tool to select the cropping area.",
                             ...)
+
     if(!is.na(sf::st_crs(mosaic))){
       grids <-
         sf::st_make_grid(controls$finished, n = c(1, 1)) |>
@@ -2183,9 +2439,79 @@ mosaic_crop <- function(mosaic,
         sf::st_make_grid(controls$finished, n = c(1, 1)) |>
         sf::st_transform(sf::st_crs("+proj=utm +zone=32 +datum=WGS84 +units=m"))
     }
-    cropped <- terra::crop(mosaic, grids)
+    if(!in_memory){
+      cropped <- terra::crop(mosaic, grids)
+    } else{
+
+    }
   } else{
-    cropped <- terra::crop(mosaic, shapefile |> terra::vect() |> terra::buffer(buffer))
+    if(!is.null(shapefile)){
+      crop_gdal <- function(mosaic, shp, exact, buffer = 0) {
+        bb   <- shp |> sf::st_buffer(buffer) |> sf::st_bbox()
+        opts <- c(
+          "-overwrite",
+          "-te",
+          bb[["xmin"]], bb[["ymin"]],
+          bb[["xmax"]], bb[["ymax"]]
+        )
+        if (exact) {
+          temp_path <- tempfile(fileext = ".geojson")
+          shapefile |>
+            sf::st_union() |>
+            sf::st_buffer(buffer) |>
+            sf::st_convex_hull() |>
+            sf::st_write(temp_path, driver = "GeoJSON", quiet = TRUE)
+          cutline_path <- temp_path
+          on.exit(unlink(temp_path), add = TRUE)
+          opts <- c(
+            "-cutline", cutline_path,
+            "-crop_to_cutline",
+            "-dstnodata", "nan",    # or a numeric nodata value like "255" or "-9999"
+            "-overwrite"
+          )
+        }
+        if(terra::inMemory(mosaic)){
+          tf <- paste0(tempfile(), ".tif")
+          on.exit(file.remove(tf))
+          terra::writeRaster(mosaic, filename = tf)
+          tempf <- tf
+        } else{
+          tempf <- terra::sources(mosaic)
+        }
+        out <- tempfile(fileext = ".tif")
+        suppressWarnings(
+          sf::gdal_utils(
+            util        = "warp",
+            source      = tempf,
+            destination = out,
+            options     = opts
+          )
+        )
+        return(terra::rast(out))
+      }
+
+      if(type[[1]] == "crop"){
+        if(in_memory){
+          shp <- shapefile |> terra::vect() |> terra::buffer(buffer)
+          cropped <- terra::crop(mosaic, shp)
+        } else{
+          cropped <- crop_gdal(mosaic, shapefile, exact = FALSE, buffer)
+        }
+
+      } else{
+        if(in_memory){
+          shp <- shapefile |> terra::vect() |> terra::buffer(buffer)
+          cropped <- terra::mask(mosaic, shp)
+        } else{
+          cropped <- crop_gdal(mosaic, shapefile, exact = TRUE, buffer)
+        }
+
+      }
+
+    }
+    if(!is.null(mosaic2)){
+      cropped <- terra::crop(mosaic, mosaic2)
+    }
   }
   invisible(cropped)
 
@@ -2214,8 +2540,13 @@ mosaic_crop <- function(mosaic,
 #'   in memory. Defaults to `TRUE`. In most cases, this is 2-3 times faster, but
 #'   errors can occur if `mosaic` is a large `SpatRaster`. If `FALSE`, raster
 #'   algebra operations are performed on temporary files.
+#' @param output Character(1), either \code{"memory"} or \code{"disk"}.
+#'   If \code{"memory"}, the function returns a \code{terra::SpatRaster} object assembled in memory.
+#'   If \code{"disk"}, each index layer is written out to a temporary GeoTIFF and the function returns
+#'   a \code{terra::SpatRaster} object that points to those rasters. Default is \code{"memory"}.
 #' @param workers numeric. The number of workers you want to use for parallel
 #'   processing when computing multiple indexes.
+#' @param verbose Whether to display progress messages.
 #' @return An index layer extracted/computed from the mosaic raster.
 #'
 #' @details This function computes or extracts an index layer from the input
@@ -2242,7 +2573,7 @@ mosaic_crop <- function(mosaic,
 #'
 
 mosaic_index <- function(mosaic,
-                         index = "R",
+                         index = "NGRDI",
                          r = 3,
                          g = 2,
                          b = 1,
@@ -2252,22 +2583,91 @@ mosaic_index <- function(mosaic,
                          tir = NA,
                          plot = TRUE,
                          in_memory = TRUE,
-                         workers = 1){
+                         output = c("memory", "disk"),
+                         workers = 1,
+                         verbose = TRUE){
+
   indices <- c(r = r, g = g, b = b, re = re, nir = nir, swir = swir, tir = tir)
-  valid_indices <- indices[!is.na(indices)]
+  ind <- read.csv(file=system.file("indexes.csv", package = "pliman", mustWork = TRUE), header = T, sep = ";")
+  indexname <- index
+  for(i in seq_along(index)){
+    if(index[i] %in% ind$Index && ind[which(index[i] == ind$Index), 3] == "HYP"){
+      index[i] <- indexband_to_formula(names(mosaic), ind[which(index[i] == ind$Index), 2])
+    }
+  }
+  # GENERAL BAND-AVAILABILITY CHECK
+  # for each index expression, find which bands it uses,
+  # Compute which bands are unavailable for each index
+  required <- lapply(index, function(expr) {
+    # pick formula: either named equation or literal expr
+    formula <- if (expr %in% ind$Index) {
+      as.character(ind$Equation[ind$Index == expr])
+    } else {
+      expr
+    }
+    # get positions of layers referenced in the formula
+    lyrs <- unavailable_layers(indices, formula)
+    names(indices)[lyrs]
+  })
+
+  # Build a list of missing-band info per index
+  missing_info <- lapply(seq_along(required), function(i) {
+    mb <- required[[i]][is.na(indices[ required[[i]] ])]
+    if (length(mb) > 0) {
+      list(name = indexname[i], bands = mb)
+    } else {
+      NULL
+    }
+  })
+  missing_info <- Filter(Negate(is.null), missing_info)
+
+  # Assemble into a data.frame
+  df_missing <- if (length(missing_info) > 0) {
+    data.frame(
+      index         = vapply(missing_info, `[[`, "", "name"),
+      missing_bands = vapply(missing_info, function(x) paste(x$bands, collapse = ", "), ""),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    # no missing bands
+    data.frame(index = character(0), missing_bands = character(0))
+  }
+
+  if (nrow(df_missing) > 0) {
+    # build each line with an "i" bullet and the index in blue
+    lines <- vapply(seq_len(nrow(df_missing)), function(i) {
+      paste0(cli::col_blue(df_missing$index[i]), ": ", df_missing$missing_bands[i])
+    }, character(1))
+
+    msgs <- c(
+      "The following indices were skipped due to missing bands:",
+      lines
+    )
+    names(msgs) <- c("x", rep("i", length(lines)))
+
+    cli::cli_warn(msgs)
+  }
+  # Skip any indices with missing bands
+  keep <- !indexname %in% df_missing$index
+  index     <- index[keep]
+  indexname <- indexname[keep]
+  if(length(indexname) == 0){
+    cli::cli_abort("None of the requested indices can be computed because all required bands are missing.")
+  }
+
   if(length(index) == 1){
     if(inherits(mosaic, "Image")){
       ras <- t(terra::rast(mosaic@.Data))
     } else{
       ras <- mosaic
     }
-    ind <- read.csv(file=system.file("indexes.csv", package = "pliman", mustWork = TRUE), header = T, sep = ";")
     checkind <- index %in% ind$Index
     if (!all(checkind)) {
-      message(paste("Index '", paste0(index[!checkind], collapse = ", "), "' is not available. Trying to compute your own index.",
-                    sep = ""))
+      missing <- index[!checkind]
+      cli::cli_warn(
+        "Index{?es} {.val {paste(missing, collapse = \", \")}} not available. Trying to compute your own index{?es}."
+      )
     }
-    dimmo <- prod(dim(mosaic)[1:2])
     pattern <- "\\b\\w+\\b"
     reserved <- c("exp", "abs", "min", "max", "median", "sum", "sqrt", "cos", "sin", "tan", "log", "log10")
     layersused <- setdiff(unlist(regmatches(index, gregexpr(pattern, index, perl = TRUE))), reserved)
@@ -2286,9 +2686,13 @@ mosaic_index <- function(mosaic,
       if(in_memory){
         if(index %in% ind$Index){
           formula <- as.character(ind$Equation[as.character(ind$Index)==index])
-          mosaic_gray <- terra::lapp(mosaic[[valid_indices]], parse_formula(formula, valid_indices))
+          lyrs <- used_layers(indices, formula)
+          names(lyrs) <- names(indices)[indices %in% lyrs]
+          mosaic_gray <- terra::lapp(mosaic[[lyrs]], parse_formula(formula, lyrs))
         } else{
-          mosaic_gray <- terra::lapp(mosaic[[valid_indices]], parse_formula(index, valid_indices))
+          lyrs <- used_layers(indices, index)
+          names(lyrs) <- names(indices)[indices %in% lyrs]
+          mosaic_gray <- terra::lapp(mosaic[[lyrs]], parse_formula(index, lyrs))
         }
       } else{
         R <- try(ras[[indices[["r"]]]], TRUE)
@@ -2305,7 +2709,7 @@ mosaic_index <- function(mosaic,
         }
       }
     }
-    names(mosaic_gray) <- index
+    names(mosaic_gray) <- indexname
     if(!is.na(terra::crs(mosaic))){
       if(terra::crs(mosaic_gray) != terra::crs(mosaic)){
         suppressWarnings(terra::crs(mosaic_gray) <- terra::crs(mosaic))
@@ -2313,11 +2717,33 @@ mosaic_index <- function(mosaic,
     } else{
       suppressWarnings(terra::crs(mosaic_gray) <- "+proj=utm +zone=32 +datum=WGS84 +units=m")
     }
+    if(output[1] == "disk"){
+      tfil <- paste0(tempfile(), ".tif")
+      terra::writeRaster(mosaic_gray, tfil, overwrite = TRUE)
+      mosaic_gray <-terra::rast(tfil)
+    }
   } else{
     if(workers > 1){
-      future::plan(future::multisession, workers = workers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
+      # CLI header + progress step
+      if(output[1] == "memory"){
+        cli::cli_alert_info("Argument {.arg output = {output[1]}} can only be used in a sequential strategy. Parallel processing will return the vegetation indexes in disk by default.")
+      }
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Creating rasters for {.val {length(unique(index))}} indices"),
+          right = cli::col_blue("Started at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+        )
+        cli::cli_progress_step(
+          msg        = "Processing {.val {length(unique(index))}} indices in parallel...",
+          msg_done   = "Vegetation indices successfully computed.",
+          msg_failed = "Raster creation failed."
+        )
+      }
+
+      # start mirai daemons
+      mirai::daemons(workers)
+      on.exit(mirai::daemons(0), add = TRUE)
+
       if(terra::inMemory(mosaic)){
         tf <- paste0(tempfile(), ".tif")
         on.exit(file.remove(tf))
@@ -2326,46 +2752,121 @@ mosaic_index <- function(mosaic,
       } else{
         tempf <- terra::sources(mosaic)
       }
-      d <-
-        foreach::foreach(i = seq_along(index),
-                         .options.future = list(
-                           seed = TRUE
-                         )) %dofut%{
-                           tfil <- paste0(tempfile(), ".tif")
-                           mosaic_index(terra::rast(tempf),
-                                        index = unique(index)[[i]],
-                                        r = r,
-                                        g = g,
-                                        b = b,
-                                        re = re,
-                                        nir = nir,
-                                        swir = swir,
-                                        tir = tir,
-                                        in_memory = in_memory,
-                                        plot = FALSE) |>
-                             terra::writeRaster(tfil, overwrite = TRUE)
-                           tfil
-                         }
-      mosaic_gray <- terra::rast(unlist(d)) |> terra::wrap() |> terra::unwrap()
-      on.exit(file.remove(unlist(d)))
+
+      # run mosaic_index in parallel and capture temp file paths
+      tdir <- tempdir()
+      tif_list <- mirai::mirai_map(
+        .x = unique(index),
+        .f = function(idx) {
+          tfil <- paste0(tempfile(), ".tif")
+          pliman::mosaic_index(
+            terra::rast(tempf),
+            index     = idx,
+            r         = r,
+            g         = g,
+            b         = b,
+            re        = re,
+            nir       = nir,
+            swir      = swir,
+            tir       = tir,
+            in_memory = in_memory,
+            plot      = FALSE
+          ) |>
+            terra::writeRaster(tfil, overwrite = TRUE)
+          tfil
+        }
+      )[.progress]
+
+      # assemble the final mosaic
+      mosaic_gray <-terra::rast(unlist(tif_list))
+
     } else{
-      mosaic_gray <- terra::rast(
-        Map(c,
-            lapply(seq_along(unique(index)), function(i){
-              mosaic_index(mosaic,
-                           index = unique(index)[[i]],
-                           r = r,
-                           g = g,
-                           b = b,
-                           re = re,
-                           nir = nir,
-                           swir = swir,
-                           tir = tir,
-                           in_memory = in_memory,
-                           plot = FALSE)
-            })
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Computing rasters for {.val {length(unique(index))}} indices"),
+          right = cli::col_blue("Started at {.val {format(Sys.time(), '%H:%M:%OS0')}}")
         )
-      )
+        cli::cli_progress_bar(
+          format = "{cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta}",
+          total  = length(unique(index)),
+          clear  = FALSE
+        )
+      }
+
+      if(output[1] == "disk"){
+        idxs    <- unique(index)
+        tif_list <- vector("character", length(idxs))
+        for (i in seq_along(idxs)) {
+          idx  <- idxs[i]
+          tfil <- tempfile(fileext = ".tif")
+
+          # compute & write each index directly to disk
+          r_i <- pliman::mosaic_index(
+            mosaic,
+            index     = idx,
+            r         = r,
+            g         = g,
+            b         = b,
+            re        = re,
+            nir       = nir,
+            swir      = swir,
+            tir       = tir,
+            in_memory = in_memory,
+            plot      = FALSE
+          )
+          terra::writeRaster(r_i, filename = tfil, overwrite = TRUE)
+          rm(r_i)       # drop from memory immediately
+          tif_list[i] <- tfil
+
+          if (verbose) {
+            cli::cli_progress_update()
+          }
+        }
+        # assemble your final multi-layer raster from the on-disk files
+        mosaic_gray <- terra::rast(tif_list)
+        names(mosaic_gray) <- unique(indexname)
+      } else{
+
+        # compute each index raster with progress updates
+        res_list <- vector("list", length(unique(index)))
+        for (i in seq_along(unique(index))) {
+          res_list[[i]] <- mosaic_index(
+            mosaic,
+            index     = unique(index)[[i]],
+            r         = r,
+            g         = g,
+            b         = b,
+            re        = re,
+            nir       = nir,
+            swir      = swir,
+            tir       = tir,
+            in_memory = in_memory,
+            plot      = FALSE
+          )
+          if (verbose) {
+            cli::cli_progress_update()
+          }
+        }
+
+        if (verbose) {
+          cli::cli_progress_done()
+        }
+
+        # assemble into a SpatRaster
+        mosaic_gray <- terra::rast(Map(c, res_list))
+        names(mosaic_gray) <- unique(indexname)
+
+      }
+
+      if (verbose) {
+        cli::cli_progress_done()
+        cli::cli_rule(
+          left  = cli::col_blue("{.val {length(unique(indexname))}} vegetation indices computed"),
+          right = cli::col_blue("Ended at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+        )
+      }
+
+
     }
   }
   if(plot){
@@ -2412,19 +2913,26 @@ mosaic_index2 <- function(mosaic,
                           python = Sys.which('python.exe'),
                           gdal = Sys.which('gdal_calc.py')) {
   if(python == ''){
-    stop('Error: Python executable (python.exe) not found on the system. Please, install it and add it to the PATH variable')
+    cli::cli_abort(c(
+      "!" = "Python executable {.file python.exe} not found on the system.",
+      "i" = "Please install Python and ensure it is added to the system {.envvar PATH} variable."
+    ))
   }
   if(gdal==''){
-    stop("Error: gdal_calc.py not found on the system. Make sure GDAL is installed and available in the system PATH.
-         You can install GDAL by installing miniconda (https://docs.conda.io/projects/miniconda/en/latest/)
-         and then running 'conda install -c conda-forge gdal' in the conda terminal.
-         Additionally, make sure that the Python Scripts directory is added to the system PATH.")
+    cli::cli_abort(c(
+      "!" = "{.file gdal_calc.py} not found on the system.",
+      "i" = "Make sure GDAL is installed and available in the system {.envvar PATH}.",
+      ">" = "You can install GDAL via Miniconda: {.code conda install -c conda-forge gdal}",
+      "i" = "Download Miniconda at: {.url https://docs.conda.io/projects/miniconda/en/latest/}",
+      "i" = "Also ensure that the Python Scripts directory (e.g., {.path C:/Users/yourname/AppData/Local/Programs/Python/PythonXX/Scripts}) is in the {.envvar PATH}."
+    ))
+
   }
   ind <- read.csv(file=system.file("indexes.csv", package = "pliman", mustWork = TRUE), header = T, sep = ";")
   checkind <- index %in% ind$Index
   if (!checkind) {
-    message(paste("Index '", paste0(index[!checkind], collapse = ", "), "' is not available. Trying to compute your own index.",
-                  sep = ""))
+    cli::cli_inform("Index {.val {paste0(index[!checkind], collapse = ', ')}} is not available. Trying to compute your own index.")
+
   } else{
     index <- as.character(ind$Equation[as.character(ind$Index)==index])
   }
@@ -2495,7 +3003,11 @@ mosaic_segment <- function(mosaic,
                            invert = FALSE,
                            return = c("mosaic", "mask")){
   if(!return[[1]] %in% c("mosaic", "mask")){
-    stop("'return' must be one of 'mosaic' or 'mask'.")
+    cli::cli_abort(c(
+      "!" = "{.arg return} must be one of:",
+      "x" = "{.val mosaic}, {.val mask}"
+    ))
+
   }
   ind <- mosaic_index(mosaic,
                       index = index,
@@ -2552,7 +3064,10 @@ mosaic_segment_pick <- function(mosaic,
                                 quantiles = c(0, 1),
                                 return = c("mosaic", "mask")){
   if(!return[[1]] %in% c("mosaic", "mask")){
-    stop("'return' must be one of 'mosaic' or 'mask'.")
+    cli::cli_abort(c(
+      "!" = "{.arg return} must be one of:",
+      "v" = "{.val mosaic} or {.val mask}"
+    ))
   }
   downsample <- ifelse(is.null(downsample), find_aggrfact(mosaic, max_pixels = max_pixels), downsample)
   if(downsample > 0){
@@ -3188,6 +3703,23 @@ sentinel_to_tif <- function(layers = NULL,
   )
 }
 
+# helper to run code and capture all cat() into a temp file
+capture_to_tempfile <- function(expr) {
+  tmp <- tempfile(pattern = "fields_log_", fileext = ".txt")
+  con <- file(tmp, open = "wt")
+  sink(con)            # divert stdout (where cat() goes)
+  on.exit({            # ensure we restore and close
+    sink()
+    close(con)
+  })
+  result <- eval(expr) # run your code
+  invisible(list(fit = result, logfile = tmp))
+}
+
+a <- capture_to_tempfile({
+  cat("a")
+  3
+})
 #' Calculate Canopy Height Model and Volume
 #'
 #' This function calculates the canopy height model (CHM) and the volume for a
@@ -3208,6 +3740,11 @@ sentinel_to_tif <- function(layers = NULL,
 #' @param window_size An integer  (meters) specifying the window size (rows and
 #'   columns, respectively) for creating a DTM using a moving window. Default is
 #'   c(10, 10).
+#' @param ground_quantile Numeric value between `0` and `1` indicating the
+#'   quantile threshold for ground point selection in the CHM computation. Lower
+#'   values (e.g., `0`) retain the lowest ground points, while higher values
+#'   (e.g., `1`) consider higher ground elevations. Default is `0`, which uses
+#'   the lowest points within each window.
 #' @param mask (optional) A `SpatRaster` object used to mask the CHM and volume
 #'   results. Default is NULL.
 #' @param mask_soil Is `mask` representing a soil mask (eg., removing plants)? Default is TRUE.
@@ -3240,36 +3777,58 @@ mosaic_chm <- function(dsm,
                        points = NULL,
                        interpolation = c("Tps", "Kriging"),
                        window_size = c(5, 5),
+                       ground_quantile = 0,
                        mask = NULL,
                        mask_soil = TRUE,
                        verbose = TRUE){
+  if(!interpolation[[1]] %in% c("Tps", "Kriging")){
+    cli::cli_abort("{.arg interpolation} must be one of {.val Tps} or {.val Kriging}.")
+  }
   # Check if fields is installed
   # check_and_install_package("fields")
-
   sampp <- NULL
   ch1 <- !inherits(dsm,"SpatRaster") || !terra::nlyr(dsm) == 1 || terra::is.bool(dsm) || is.list(dsm)
   if(ch1){
-    stop("dsm must be single-layer SpatRaster objects")
+    cli::cli_abort("{.arg dsm} must be single-layer {.code SpatRaster} objects")
+  }
+  # mensagens CLI
+  if (verbose) {
+    cli::cli_rule(
+      left  = cli::col_blue("Canopy Height-Model generation"),
+      right = cli::col_blue("{.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+    )
   }
   # interpolate dtm using sample of points
   if(is.null(dtm) & !is.null(points)){
     # sampling points
     points <- points |> sf::st_transform(sf::st_crs(dsm))
+
+
     if(verbose){
-      message("\014","\nExtracting values...\n")
+      cli::cli_progress_step(
+        msg        = "Extracting values...",
+        msg_done   = "Extracting values",
+        msg_failed = "Extracting values failed"
+      )
     }
     vals <- terra::extract(dsm, terra::vect(points), xy = TRUE)
     xy <- cbind(vals$x,vals$y)
     z <- vals[, 2]
+
     if(verbose){
-      message("\014","\nInterpolating the raster...\n")
+      cli::cli_progress_step(
+        msg        = "Interpolating the raster...",
+        msg_done   = "Interpolating the raster",
+        msg_failed = "Interpolation failed"
+      )
     }
     if(interpolation[[1]] == "Kriging"){
-      fit <- suppressMessages(suppressWarnings(fields::Krig(xy, z, aRange=20)))
+      fit <- fields::Krig(xy, z, aRange=20, give.warnings = FALSE)
     }
     if(interpolation[[1]] == "Tps"){
-      fit <- suppressMessages(suppressWarnings(fields::Tps(xy, z)))
+      fit <- fields::Tps(xy, z, give.warnings = FALSE)
     }
+
     sampp <- NULL
     # low resolution to interpolate
     aggr <- find_aggrfact(dsm, 4e5)
@@ -3282,7 +3841,11 @@ mosaic_chm <- function(dsm,
     gc()
     terra::crs(dtm) <- terra::crs(dsm)
     if(verbose){
-      message("\014","\nResampling and masking the interpolated raster...\n")
+      cli::cli_progress_step(
+        msg        = "Resampling and masking the interpolated raster...",
+        msg_done   = "Resampling and masking the interpolated raster",
+        msg_failed = "Resampling failed"
+      )
     }
     dtm <- terra::resample(dtm, dsm)
     gc()
@@ -3298,7 +3861,11 @@ mosaic_chm <- function(dsm,
     nr <- ceiling( heig / window_size[[1]])
     nc <- ceiling( wide / window_size[[2]])
     if(verbose){
-      message("\014","\nExtracting minimum value for each moving window...\n")
+      cli::cli_progress_step(
+        msg        = "Extracting ground points for each moving window...",
+        msg_done   = "Extracting ground points for each moving window",
+        msg_failed = "Extraction failed"
+      )
     }
     shp <- shapefile_build(dsm,
                            nrow = nr,
@@ -3307,7 +3874,8 @@ mosaic_chm <- function(dsm,
                            verbose = FALSE)
     vals <- exactextractr::exact_extract(dsm,
                                          shp[[1]],
-                                         fun = "min",
+                                         fun = "quantile",
+                                         quantiles = ground_quantile,
                                          progress = FALSE)
     gc()
     cent <- suppressWarnings(sf::st_centroid(shp[[1]]))
@@ -3320,13 +3888,17 @@ mosaic_chm <- function(dsm,
     z <- sampp$dtm
 
     if(verbose){
-      message("\014","\nInterpolating the raster...\n")
+      cli::cli_progress_step(
+        msg        = "Interpolating ground points...",
+        msg_done   = "Interpolating ground points",
+        msg_failed = "Interpolation failed"
+      )
     }
     if(interpolation[[1]] == "Kriging"){
-      fit <- suppressMessages(suppressWarnings(fields::Krig(xy, z, aRange=20)))
+      fit <- fields::Krig(xy, z, aRange=20, give.warnings = FALSE)
     }
     if(interpolation[[1]] == "Tps"){
-      fit <- suppressMessages(suppressWarnings(fields::Tps(xy, z)))
+      fit <- fields::Tps(xy, z, give.warnings = FALSE)
     }
 
     # low resolution to interpolate
@@ -3339,7 +3911,11 @@ mosaic_chm <- function(dsm,
     dtm <- terra::interpolate(terra::rast(mosaicintp), fit)
     terra::crs(dtm) <- terra::crs(dsm)
     if(verbose){
-      message("\014","\nResampling and masking the interpolated raster...\n")
+      cli::cli_progress_step(
+        msg        = "Resampling and masking the interpolated raster...",
+        msg_done   = "Resampling and masking the interpolated raster",
+        msg_failed = "Resampling failed"
+      )
     }
     dtm <- terra::resample(dtm, dsm)
     gc()
@@ -3350,20 +3926,26 @@ mosaic_chm <- function(dsm,
   if(!is.null(dtm)){
     ch2 <- !inherits(dtm,"SpatRaster") || !terra::nlyr(dtm) == 1 || terra::is.bool(dtm) || is.list(dtm)
     if(ch2){
-      stop("dtm must be single-layer SpatRaster objects")
+      cli::cli_abort("{.arg dtm} must be single-layer SpatRaster objects")
     }
     if((terra::ext(dsm) != terra::ext(dtm)) || (terra::ncell(dtm) != terra::ncell(dsm))){
-      message("\014","\nPutting dtm and dsm in the same resolution...\n")
+      if(verbose){
+        cli::cli_progress_step(
+          msg        = "Putting dtm and dsm in the same resolution...",
+          msg_done   = "Putting dtm and dsm in the same resolution",
+          msg_failed = "Failed"
+        )
+      }
       dtm <- terra::resample(dtm, dsm)
     }
     if(verbose){
-      message("\014","\nBuilding the canopy height model...\n")
+      cli::cli_progress_step(
+        msg        = "Building the canopy height model...",
+        msg_done   = "Building the canopy height model",
+        msg_failed = "Failed"
+      )
     }
     chm <- dsm - dtm
-    gc()
-    psize <- prod(terra::res(chm))
-    volume <- chm * psize
-    chm <- c(chm, volume)
     gc()
     if(!is.null(mask)){
       if((terra::ext(mask) != terra::ext(dsm)) || (terra::ncell(mask) != terra::ncell(dsm))){
@@ -3372,98 +3954,116 @@ mosaic_chm <- function(dsm,
       chm <- terra::mask(chm,  mask, maskvalues = mask_soil)
     }
     chm <- c(dtm, chm)
-    names(chm) <- c("dtm", "height", "volume")
+    names(chm) <- c("dtm", "height")
   }
-  if(verbose){
-    message("\014","\nDone!\n")
-  }
-  return(list(chm = chm, sampling_points = sampp, mask = ifelse(is.null(mask), FALSE, TRUE)))
+  return(list(chm = chm,
+              sampling_points = sampp,
+              mask = ifelse(is.null(mask), FALSE, TRUE),
+              res =  terra::res(dsm)))
 }
 
-#' Extract Canopy Height and Volume
+#' Extracts height metrics and plot quality from a Canopy Height Model (CHM)
 #'
-#' This function extracts canopy height and volume metrics for given plots
-#' within a specified shapefile.
-#' @param chm A list object containing the Canopy Height Model (CHM) generated
-#'   by the [mosaic_chm()] function.
-#' @param shapefile An `sf` object representing the plot boundaries for which
-#'   the metrics will be extracted.
+#' This function extracts height-related summary statistics from a CHM using a
+#' given shapefile.
 #'
-#' @return A `sf` object with extracted metrics including minimum, 10th
-#'   percentile, median (50th percentile), 90th percentile, interquartile range
-#'   (IQR), mean, maximum canopy height, coefficient of variation (CV) of canopy
-#'   height, canopy height entropy, total volume, covered area, plot area, and
-#'   coverage percentage. Centroid coordinates (x, y) of each plot are also
-#'   included.
-#' @details
-#' The function uses the `exactextractr` package to extract canopy height and
-#' volume metrics from the CHM. For each plot in the shapefile, the function
-#' computes various statistics on the canopy height values (e.g., min, max,
-#' percentiles, mean, CV, entropy) and sums the volume values. If a mask was
-#' applied in the CHM calculation, the covered area and plot area are also
-#' computed.
+#' @param chm An object computed with [mosaic_chm()].
+#' @param shapefile An `sf` object containing the polygons over which height
+#'   metrics are extracted.
+#' @param chm_threshold A numeric value representing the height threshold for
+#'   calculating coverage. If `NULL`, coverage is not computed.
+#' @return An `sf` object containing height summary statistics for each plot,
+#'   including:
+#' * `min`: Minimum height value.
+#' * `q05`: 5th percentile height value.
+#' * `q50`: Median height value.
+#' * `q95`: 95th percentile height value.
+#' * `max`: Maximum height value.
+#' * `mean`: Mean height value.
+#' * `volume`: Total sum of heights multiplied by CHM resolution.
+#' * `coverage`: If a mask is used in [mosaic_chm()] or `chm_threshold` is
+#' informed, returns the proportion of pixels covered within the plot.
+#' Otherwise, returns 1.
+#'
 #' @export
-mosaic_chm_extract <- function(chm, shapefile){
+
+mosaic_chm_extract <- function(chm, shapefile, chm_threshold = NULL) {
   custom_summary <- function(values, coverage_fractions, ...) {
     valids <- na.omit(values)
-    entropy <- function(values) {
-      freq <- table(round(values, 2))
-      prob <- freq / sum(freq)
-      entropy <- -sum(prob * log(prob))
-      return(entropy)
+    sumvalids <- sum(valids)
+    quantiles <- quantile(valids, c(0, 0.05, 0.5, 0.95, 1))
+    mean_val <- sumvalids / length(valids)
+    volume <- sumvalids * prod(chm[["res"]])
+    cv <- mean(valids) / sd(valids)
+    entropy <- entropy(valids)
+    if (!is.null(chm_threshold)) {
+      coverage <- sum(valids > chm_threshold) / length(valids)
+      data.frame(
+        min = quantiles[[1]],
+        q05 = quantiles[[2]],
+        q50 = quantiles[[3]],
+        q95 = quantiles[[4]],
+        max = quantiles[[5]],
+        mean = mean_val,
+        cv = cv,
+        entropy = entropy,
+        volume = volume,
+        coverage = coverage
+      )
+    } else{
+      data.frame(
+        min = quantiles[[1]],
+        q05 = quantiles[[2]],
+        q50 = quantiles[[3]],
+        q95 = quantiles[[4]],
+        max = quantiles[[5]],
+        mean = mean_val,
+        cv = cv,
+        entropy = entropy,
+        volume = volume
+      )
     }
-    quantiles <- quantile(valids, c(0.1, 0.5, 0.9))
-    data.frame(
-      min = min(valids),
-      q10 = quantiles[[1]],
-      q50 = quantiles[[2]],
-      q90 = quantiles[[3]],
-      iqr = IQR(valids),
-      mean = sum(valids) / length(valids),
-      max = max(valids),
-      cv = sd(valids) / mean(valids),
-      entropy = entropy(valids)
-    )
+
   }
   height <- exactextractr::exact_extract(chm$chm[[2]],
                                          shapefile,
                                          fun = custom_summary,
                                          force_df = TRUE,
                                          progress = FALSE)
-  vol <- exactextractr::exact_extract(chm$chm[[3]],
-                                      shapefile,
-                                      fun = "sum",
-                                      force_df = TRUE,
-                                      progress = FALSE)
-  names(vol) <- c("volume")
-
-  # include check here if mask is not present
-  if(chm$mask){
-    area <- exactextractr::exact_extract(chm$chm[[3]],
-                                         shapefile,
-                                         coverage_area = TRUE,
-                                         force_df = TRUE,
-                                         progress = FALSE)
-    covered_area <-
-      purrr::map_dfr(area, function(x){
-        data.frame(covered_area = sum(na.omit(x)[, "coverage_area"]),
-                   plot_area = sum(x[, "coverage_area"]))
-      }) |>
+  if (chm$mask) {
+    area2 <- exactextractr::exact_extract(chm$chm[[2]],
+                                          shapefile,
+                                          coverage_area = TRUE,
+                                          force_df = TRUE,
+                                          progress = FALSE)
+    covered_area <- purrr::map_dfr(area2, function(x) {
+      data.frame(covered_area = sum(na.omit(x)[, "coverage_area"]),
+                 plot_area = sum(x[, "coverage_area"]))
+    }) |>
       dplyr::mutate(coverage = covered_area / plot_area)
-  } else{
+  } else {
     area <- as.numeric(sf::st_area(shapefile))
-    covered_area <- data.frame(covered_area = area,
-                               plot_area = area,
-                               coverage = 1)
+    if (is.null(chm_threshold)) {
+      covered_area <- data.frame(plot_area = area)
+    } else {
+      covered_area <- data.frame(covered_area = area * height$coverage,
+                                 plot_area = area)
+    }
   }
+  shapefile <-
+    shapefile |>
+    dplyr::select(-suppressWarnings(dplyr::any_of(c("x", "y"))))
   centroids <- suppressWarnings(sf::st_centroid(shapefile)) |> sf::st_coordinates()
   colnames(centroids) <- c("x", "y")
   dftmp <-
-    dplyr::bind_cols(height, vol, covered_area, centroids, shapefile) |>
+    dplyr::bind_cols(height, covered_area, centroids, shapefile) |>
     sf::st_as_sf() |>
     dplyr::relocate(unique_id, block, plot_id, row, column, x, y, .before = 1)
+
   return(dftmp)
 }
+
+
 
 
 #' Apply a height mask to CHM data
@@ -3536,8 +4136,8 @@ mosaic_chm_mask <- function(dsm,
 mosaic_epsg <- function(mosaic) {
   if(terra::is.lonlat(mosaic)){
     extens <- terra::ext(mosaic)
-    latitude <- mean(c(extens[3], extens[4]))
-    longitude <- mean(c(extens[1], extens[2]))
+    latitude <- mean(c(terra::ymin(mosaic), terra::ymax(mosaic)))
+    longitude <- mean(c(terra::xmin(mosaic), terra::xmax(mosaic)))
     utm_zone <- floor((longitude + 180) / 6) + 1
     hemisphere <- ifelse(latitude >= 0, "N", "S")
     epsg_code <- if (hemisphere == "N") {
@@ -3547,7 +4147,7 @@ mosaic_epsg <- function(mosaic) {
     }
     return(paste0("EPSG:", epsg_code))
   } else{
-    warning("`mosaic` is not in the lon/lat coordinate system.")
+    cli::cli_alert_danger("`mosaic` is not in the lon/lat coordinate system.")
   }
 }
 
@@ -3612,7 +4212,7 @@ mosaic_lonlat2epsg <- function(mosaic){
     epsg <- mosaic_epsg(mosaic)
     return(terra::project(mosaic, epsg))
   } else{
-    warning("`mosaic` is not in the lon/lat coordinate system.")
+    cli::cli_alert_danger("`mosaic` is not in the lon/lat coordinate system.")
   }
 }
 
@@ -3644,7 +4244,7 @@ mosaic_extract <- function(mosaic,
                                  fun = fun,
                                  force_df = TRUE,
                                  ...)
-  sf::st_as_sf(dplyr::bind_cols(results, shapefile)) |> dplyr::relocate(unique_id:diam_max, .before = 1)
+  sf::st_as_sf(dplyr::bind_cols(results, shapefile)) |> dplyr::relocate(unique_id:column, .before = 1)
 }
 
 #' Vectorize a `SpatRaster` mask to an `sf` object
@@ -3660,6 +4260,8 @@ mosaic_extract <- function(mosaic,
 #' @param fill_hull Fill holes in the binary image? Defaults to `FALSE`.
 #' @return An `sf` object containing vectorized features from the raster mask,
 #'   with added area measurements.
+#' @param smooth Smoothes the contours using a moving average filter. Default is
+#'   `FALSE`.
 #' @export
 #' @examples
 #' if (interactive() && requireNamespace("EBImage")) {
@@ -3685,12 +4287,13 @@ mosaic_vectorize <- function(mask,
                              lower_size = NULL,
                              upper_size = NULL,
                              topn_lower = NULL,
-                             topn_upper = NULL){
+                             topn_upper = NULL,
+                             smooth = FALSE){
   if(!is.null(aggregate)){
     mask <- mosaic_aggregate(mask, aggregate)
   }
   dmask <- EBImage::Image(matrix(matrix(mask), ncol = nrow(mask), nrow = ncol(mask)))
-  extends <- terra::ext(mask)
+  extents <- terra::ext(mask)
   dmask[is.na(dmask) == TRUE] <- 0
   if(!isFALSE(fill_hull)){
     dmask <- EBImage::fillHull(dmask)
@@ -3717,13 +4320,16 @@ mosaic_vectorize <- function(mask,
   }
   conts <- EBImage::ocontour(dmask)
   conts <- conts[sapply(conts, nrow) > 2]
+  if(is.numeric(smooth) & smooth > 0){
+    conts <- smoothContours(conts, smooth)
+  }
   resx <- terra::res(mask)[1]
   resy <- terra::res(mask)[1]
   sf_df <- sf::st_sf(
     geometry = lapply(conts, function(x) {
       tmp <- x + 1
-      tmp[, 2] <-  extends[3] + (nrow(mask) - tmp[, 2]) * resy
-      tmp[, 1] <- extends[1] + tmp[, 1] * resy
+      tmp[, 2] <-  extents[3] + (nrow(mask) - tmp[, 2]) * resy
+      tmp[, 1] <- extents[1] + tmp[, 1] * resy
       geometry = sf::st_polygon(list(as.matrix(tmp |> poly_close())))
     }),
     data = data.frame(unique_id = paste0(1:length(conts))),
@@ -3737,7 +4343,8 @@ mosaic_vectorize <- function(mask,
   gridindiv <- cbind(sf_df, addmeasures)
 
   if(!is.null(lower_size) & !is.null(topn_lower) | !is.null(upper_size) & !is.null(topn_upper)){
-    stop("Only one of 'lower_*' or 'topn_*' can be used.")
+    cli::cli_abort("{.msg Only one of {.arg lower_*} or {.arg topn_*} can be used.}")
+
   }
   if(!is.null(lower_size)){
     gridindiv <- gridindiv[gridindiv$area > lower_size, ]
@@ -3751,5 +4358,368 @@ mosaic_vectorize <- function(mask,
   if(!is.null(topn_upper)){
     gridindiv <- gridindiv[order(gridindiv$area, decreasing = TRUE),][1:topn_upper,]
   }
-  return(gridindiv)
+  return(gridindiv |> check_cols_shp())
 }
+
+#' Rotate a mosaic image by specified angles
+#'
+#' This function rotates a mosaic image by 90, 180, or 270 degrees.
+#'
+#' @param mosaic A `SpatRaster` object representing the mosaic image.
+#' @param angle An integer specifying the rotation angle. Must be one of 90,
+#'   180, or 270.
+#' @param direction A string specifying the rotation direction. Must be either
+#'   "clockwise" or "anticlockwise".
+#' @return A `SpatRaster` object with the rotated mosaic image.
+#' @export
+#'
+#' @examples
+#' if (interactive() && requireNamespace("EBImage")) {
+#' library(pliman)
+#' # Convert a mosaic raster to an Image object
+#' mosaic <- mosaic_input(system.file("ex/elev.tif", package="terra"))
+#' r90 <- mosaic_rotate(mosaic, 90)
+#' r180 <- mosaic_rotate(mosaic, 180)
+#' r270 <- mosaic_rotate(mosaic, 270)
+#' # Plot all rotations side by side
+#' par(mfrow = c(2, 2))
+#' mosaic_plot(mosaic, main = "Original")
+#' mosaic_plot(r90, main = "90 Degrees")
+#' mosaic_plot(r180, main = "180 Degrees")
+#' mosaic_plot(r270, main = "270 Degrees")
+#' par(mfrow = c(1, 1))
+#'
+#' }
+mosaic_rotate <- function(mosaic, angle, direction = "clockwise") {
+  # Ensure angle is one of the allowed values
+  if (!angle %in% c(90, 180, 270)) {
+    cli::cli_abort("{.arg angle} must be one of {.val 90}, {.val 180}, or {.val 270}.")
+  }
+
+  # Ensure direction is valid
+  if (!direction %in% c("clockwise", "anticlockwise")) {
+    cli::cli_abort("{.arg direction} must be either {.val clockwise} or {.val anticlockwise}.")
+  }
+
+  # Apply the appropriate rotation based on direction
+  rotated_mosaic <- if (direction == "clockwise") {
+    switch(
+      as.character(angle),
+      "90"  = terra::t(terra::flip(mosaic)),
+      "180" = terra::flip(terra::flip(mosaic), "horizontal"),
+      "270" = terra::t(terra::flip(mosaic, "horizontal"))
+    )
+  } else {
+    switch(
+      as.character(angle),
+      "90"  = terra::flip(terra::t(mosaic)),
+      "180" = terra::flip(mosaic, "vertical"),
+      "270" = terra::t(terra::flip(mosaic))
+    )
+  }
+
+  # Return the rotated mosaic for further use
+  return(rotated_mosaic)
+}
+
+#' Classify a Mosaic Based on Index Breaks
+#'
+#' This function classifies a given raster mosaic based on user-defined breaks.
+#' It provides an option to calculate the frequency and area of each class, as
+#' well as plot the classified mosaic.
+#'
+#' @param mosaic A `SpatRaster` object representing the mosaic to be classified.
+#' @param breaks A numeric vector specifying the breakpoints for classification.
+#' @param frequency Logical. If `TRUE`, computes the class frequency and area (in hectares).
+#' @param plot Logical. If `TRUE`, plots the classified mosaic.
+#'
+#' @return A list with two elements:
+#'   - `classified`: A `SpatRaster` object containing the classified mosaic.
+#'   - `class_freq`: A data frame containing class frequencies, areas (ha), and percentages (if `frequency = TRUE`).
+#'
+#' @export
+#' @examples
+#' if(interactive()){
+#' library(pliman)
+#' library(terra)
+#'
+#' # Create an example raster
+#' r <- terra::rast(matrix(runif(100, min = 0, max = 1), nrow=10, ncol=10))
+#'
+#' # Classify the raster
+#' result <- mosaic_classify(r, breaks = c(0.3, 0.6))
+#'
+#' # View results
+#' result$classified
+#' result$class_freq
+#' }
+#'
+mosaic_classify <- function(mosaic, breaks, frequency = TRUE, plot = TRUE) {
+  breaks <- c(-Inf, breaks, Inf)
+  classified <- terra::classify(mosaic, breaks, brackets = TRUE, include.lowest = FALSE)
+
+  if (frequency) {
+    class_freq <- terra::freq(classified)
+    if (terra::crs(mosaic) == "" | terra::is.lonlat(mosaic)) {
+      cli::cli_alert_danger("Unknown CRS or lat/lon used. The area will be calculated in square units of raster")
+      class_freq$area_ha <- class_freq$count * prod(terra::res(mosaic))
+    } else {
+      class_freq$area_ha <- (class_freq$count * prod(terra::res(mosaic))) / 10000
+    }
+    total_pixels <- sum(class_freq$count)
+    class_freq$percentage <- (class_freq$count / total_pixels) * 100
+  } else {
+    class_freq <- NULL
+  }
+
+  if (plot) {
+    terra::plot(
+      classified,
+      col = pliman::custom_palette(c("darkred", "yellow", "darkgreen"), n = length(breaks)),
+      maxcell = 1e6
+    )
+  }
+  return(list(classified = classified, class_freq = class_freq))
+}
+
+
+#' Clip a Raster Mosaic by Polygons
+#'
+#' @title Clip Raster Mosaic by Polygons
+#'
+#' @description
+#' Quickly partition a large raster mosaic into individual tiles using a
+#' polygon layer.  Each tile is clipped by either the polygon's bounding box
+#' or (optionally) the exact feature geometry, and written to disk as a separate
+#' GeoTIFF named by the feature's `unique_id`.
+#'
+#' @details
+#' This function wraps GDAL's `warp` utility for efficient raster clipping.
+#' When `parallel = TRUE`, it will spawn multiple workers via `mirai` and
+#' process tiles in batches.  Use `exact = TRUE` to clip to the true polygon
+#' shape (at some extra cost), or leave `exact = FALSE` for a faster
+#' bounding-box crop.
+#'
+#' @param mosaic
+#'   A [terra::SpatRaster] object or a file path pointing to a raster.
+#'   In-memory rasters are first written to a temporary GeoTIFF.
+#' @param shapefile
+#'   An [sf::sf], [terra::SpatVector], or path to a vector file.  Must
+#'   contain a column named `unique_id` for naming each output tile.
+#' @param unique_id A column present in `shapefile` that uniquely identifies the
+#'   plots to be clipped.
+#' @param out_dir
+#'   Directory where clipped rasters will be saved.  Defaults to the current
+#'   working directory.  Created recursively if it does not exist.
+#' @param overwrite
+#'   Logical; if `TRUE` (the default), existing files in `out_dir` with the
+#'   same name will be overwritten.
+#' @param verbose
+#'   Logical; if `TRUE` (default), progress bars and status messages will be
+#'   shown.
+#' @param exact
+#'   Logical; if `FALSE` (default), tiles are cropped by each feature's
+#'   bounding box.  If `TRUE`, the function extracts each polygon as a cutline
+#'   for an exact crop (slower, but shape-accurate).
+#' @param parallel
+#'   Logical; if `TRUE` (default), processing is parallelized using `mirai`.
+#'   Set to `FALSE` for purely sequential execution.
+#' @param workers
+#'   Integer; number of parallel daemons to launch when `parallel = TRUE`.
+#'   Defaults to 70% of available cores.
+#' @export
+#' @return
+#'   Invisibly returns a character vector of file paths to all clipped GeoTIFFs.
+mosaic_clip <- function(mosaic,
+                        shapefile,
+                        unique_id =  "unique_id",
+                        out_dir = NULL,
+                        overwrite = TRUE,
+                        verbose = TRUE,
+                        exact = FALSE,
+                        parallel = FALSE,
+                        workers = NULL) {
+  odir <- if (is.null(out_dir)) "./" else {
+    if (grepl("[/\\\\]", out_dir)) out_dir else file.path(".", out_dir)
+  }
+  if (!dir.exists(odir)) {
+    cli::cli_alert_info("Creating output directory {.path {odir}}")
+    dir.create(odir, recursive = TRUE)
+  }
+  shp <- pliman::shapefile_input(shapefile, info = FALSE)
+  if (!unique_id %in% names(shp)) {
+    cli::cli_abort(
+      c(
+        "x" = "{.val {unique_id}} column not found in {.arg shapefile}.",
+        "i" = "Available columns are: {.val {names(shapefile)}}."
+      )
+    )
+
+  }
+  if (terra::inMemory(mosaic)) {
+    tf <- paste0(tempfile(), ".tif")
+    on.exit(file.remove(tf), add = TRUE)
+    terra::writeRaster(mosaic, filename = tf, overwrite = TRUE)
+    tempf <- tf
+  } else {
+    tempf <- terra::sources(mosaic)
+  }
+
+  n   <- nrow(shp)
+  ids <- as.character(shp$unique_id)
+  # check if ids are unique
+  if (length(unique(ids)) != length(ids)) {
+    cli::cli_abort("The {.val {unique_id}} column in {.arg shapefile} must contain unique values.")
+  }
+  out_files <- character(n)
+  out <- file.path(odir, paste0(ids, ".tif"))
+  if(any(basename(out) %in% list.files(path = odir)) & isFALSE(overwrite)){
+    cli::cli_abort("Some raster tiles are already in the destination directory. Use {.arg overwrite = TRUE} to overwrite those files.")
+  }
+
+  clip_fun <- function(i, tempf, shp, ids, odir) {
+    bb   <- sf::st_bbox(shp[i, ])
+    if(overwrite){
+      opts <- c(
+        "-overwrite",
+        "-te",
+        bb[["xmin"]], bb[["ymin"]],
+        bb[["xmax"]], bb[["ymax"]]
+      )
+    } else{
+      opts <- c(
+        "-te",
+        bb[["xmin"]], bb[["ymin"]],
+        bb[["xmax"]], bb[["ymax"]]
+      )
+    }
+    if (exact) {
+      # ensure shapefile is a file path
+      cutline_path <- if (is.character(shapefile) && file.exists(shapefile)) {
+        shapefile
+      } else {
+        temp_path <- tempfile(fileext = ".geojson")
+        sf::st_write(shapefile, temp_path, driver = "GeoJSON", quiet = TRUE)
+        on.exit(unlink(temp_path), add = TRUE)
+      }
+      opts <- c(
+        "-cutline", cutline_path,
+        "-cwhere", sprintf("unique_id = '%s'", ids[i]),
+        "-crop_to_cutline",
+        "-dstalpha",
+        if(overwrite){"-overwrite"}
+      )
+    }
+
+    out <- file.path(odir, paste0(ids[i], ".tif"))
+    suppressWarnings(
+      sf::gdal_utils(
+        util        = "warp",
+        source      = tempf,
+        destination = out,
+        options     = opts
+      )
+    )
+    invisible(out)
+  }
+
+  if(parallel){
+    nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores() * 0.7), workers)
+    mirai::daemons(nworkers)
+    on.exit(mirai::daemons(0))
+
+    cli::cli_rule(
+      left  = cli::col_blue("Clipping mosaic into tiles using  {.val {n}} polygons"),
+      right = cli::col_blue("Started at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+    )
+    cli::cli_progress_step(
+      msg        = "Configuring the parallel backend using {.val {nworkers}} clusters",
+      msg_done   = "Parallel process finished",
+      msg_failed = "Raster clipping failed."
+    )
+
+
+    # break features into 3 chunks
+    chunks <- split(seq_len(n), ceiling(seq_len(n)/ceiling(n/nworkers)))
+
+    # return(chunks)
+    out_files <- mirai::mirai_map(
+      chunks,
+      function(idxs, tempf, shp, ids, odir, overwrite, exact) {
+        out_paths <- character(length(idxs))
+
+        for (k in seq_along(idxs)) {
+          i <- idxs[k]
+
+          # decide between bounding-box vs cutline
+          if (exact) {
+            cutline_path <- tempfile(fileext = ".geojson")
+            sf::st_write(shp[i, ], cutline_path,
+                         driver = "GeoJSON", quiet = TRUE)
+
+            opts <- c(
+              "-cutline", cutline_path,
+              "-cwhere", sprintf("unique_id = '%s'", ids[i]),
+              "-crop_to_cutline",
+              "-dstalpha",
+              if (overwrite) "-overwrite"
+            )
+          } else {
+            bb <- sf::st_bbox(shp[i, ])
+            opts <- c(
+              "-te",
+              bb[["xmin"]], bb[["ymin"]],
+              bb[["xmax"]], bb[["ymax"]],
+              if (overwrite) "-overwrite"
+            )
+          }
+          out_paths[k] <- file.path(odir, paste0(ids[i], ".tif"))
+          sf::gdal_utils(
+            util        = "warp",
+            source      = tempf,
+            destination = out_paths[k],
+            options     = opts
+          )
+        }
+        out_paths
+      },
+      .args = list(
+        tempf     = tempf,
+        shp       = shp,
+        ids       = ids,
+        odir      = odir,
+        overwrite = overwrite,
+        exact     = exact
+      )
+    )[.progress]
+    out_files <- unlist(out_files)
+  } else{
+    if(verbose){
+      cli::cli_rule(
+        left  = cli::col_blue("Clipping mosaic into tiles using  {.val {n}} polygons"),
+        right = cli::col_blue("Started at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+      )
+      cli::cli_progress_bar(
+        format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta}",
+        total = n,
+        clear = TRUE
+      )
+    }
+
+    for (i in seq_len(n)) {
+      if(verbose){
+        cli::cli_progress_update()
+      }
+      out_files[i] <- clip_fun(i, tempf, shp, ids, odir)
+    }
+  }
+  if(verbose){
+    cli::cli_progress_done()
+    cli::cli_rule(
+      left  = cli::col_blue("Raster clipping finished"),
+      right = cli::col_blue("Finished on {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+    )
+  }
+  invisible(out_files)
+}
+

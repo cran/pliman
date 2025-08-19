@@ -69,6 +69,26 @@ add_width_height_cpp <- function(grid, width, height, points_align) {
     .Call(`_pliman_add_width_height_cpp`, grid, width, height, points_align)
 }
 
+help_label <- function(matrix, max_gap = 2L) {
+    .Call(`_pliman_help_label`, matrix, max_gap)
+}
+
+rcpp_st_perimeter <- function(sf_coords) {
+    .Call(`_pliman_rcpp_st_perimeter`, sf_coords)
+}
+
+uuid_v7 <- function() {
+    .Call(`_pliman_uuid_v7`)
+}
+
+helper_entropy <- function(values, precision = 2L) {
+    .Call(`_pliman_helper_entropy`, values, precision)
+}
+
+corners_to_wkt <- function(cornersList) {
+    .Call(`_pliman_corners_to_wkt`, cornersList)
+}
+
 help_area <- function(coord) {
     .Call(`_pliman_help_area`, coord)
 }
@@ -151,5 +171,21 @@ help_poly_angles <- function(coords) {
 
 help_smoth <- function(coords, niter) {
     .Call(`_pliman_help_smoth`, coords, niter)
+}
+
+smoothContours <- function(contours, window_size = 3L) {
+    .Call(`_pliman_smoothContours`, contours, window_size)
+}
+
+detect_line_segments <- function(image, X, Y, scale = 0.8, sigma_scale = 0.6, quant = 2.0, ang_th = 22.5, log_eps = 0.0, density_th = 0.7, n_bins = 1024L, need_to_union = 0L, union_ang_th = 7, union_use_NFA = 0L, union_log_eps = 0.0, length_threshold = 5, dist_threshold = 5) {
+    .Call(`_pliman_detect_line_segments`, image, X, Y, scale, sigma_scale, quant, ang_th, log_eps, density_th, n_bins, need_to_union, union_ang_th, union_use_NFA, union_log_eps, length_threshold, dist_threshold)
+}
+
+utils_contours <- function(image, X, Y, Q = 2.0) {
+    .Call(`_pliman_utils_contours`, image, X, Y, Q)
+}
+
+canny_edge_detector <- function(image, X, Y, s = 2, low_thr = 3, high_thr = 10, accGrad = FALSE) {
+    .Call(`_pliman_canny_edge_detector`, image, X, Y, s, low_thr, high_thr, accGrad)
 }
 

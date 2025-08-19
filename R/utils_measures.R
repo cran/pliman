@@ -105,7 +105,7 @@ get_measures <- function(object,
                          digits = 5){
   if(is.data.frame(object)){
     if(any(c("area", "perimeter", "radius_mean") %in% colnames(object) == FALSE)){
-      stop("Object informed seems to be not an object computed with pliman.")
+      cli::cli_abort("Object informed seems to be not an object computed with pliman.")
     }
     res <- object
   }
@@ -119,27 +119,31 @@ get_measures <- function(object,
     res <- object$shape
   }
   if(!is.null(id) & !is.null(dpi)){
-    stop("Only one of 'dpi' or 'id' can be used.", call. = FALSE)
+    cli::cli_abort("Only one of {.arg dpi} or {.arg id} can be used.")
   }
-  if(!is.null(id) & is.null(measure) ){
-    stop("'measure' must be informed.", call. = FALSE)
+  if (!is.null(id) & is.null(measure)) {
+    cli::cli_abort("Argument {.arg measure} must be informed when {.arg id} is provided.")
   }
-  ncols <- ifelse(class(object)  %in%  c("plm_disease", "plm_disease_byl"), 16, 18)
 
-  if(!is.null(id)){
-    if(!inherits(measure, "formula")){
-      stop("'measure' must be a two-sided formula, e.g., 'area ~ 25'.")
+  ncols <- ifelse(class(object) %in% c("plm_disease", "plm_disease_byl"), 16, 18)
+
+  if (!is.null(id)) {
+    if (!inherits(measure, "formula")) {
+      cli::cli_abort("Argument {.arg measure} must be a two-sided formula, e.g., {.code area ~ 25}.")
     }
     terms <- as.formula(measure)
     var <- as.character(terms[[2]])
-    if(exists(as.character(terms[[3]]), envir = parent.frame())){
+    if (exists(as.character(terms[[3]]), envir = parent.frame())) {
       value <- eval(terms[[3]], envir = parent.frame())
-    } else{
+    } else {
       value <- as.numeric(terms[[3]])
     }
-    measures <- c("area", "perimeter", "radius_mean", "radius_min",  "radius_max", "radius_ratio")
-    if(!var %in% measures){
-      stop("The left-hand side of 'measure' must be one of ", paste(measures, collapse = ", "), call. = FALSE)
+    measures <- c("area", "perimeter", "radius_mean", "radius_min", "radius_max", "radius_ratio")
+    if (!var %in% measures) {
+      cli::cli_abort(c(
+        "!" = "The left-hand side of {.arg measure} must be one of:",
+        "x" = "{.val {paste(measures, collapse = ', ')}}"
+      ))
     }
     if(var == "area"){
       id_val <- res[which(res$id == id), var]
@@ -267,7 +271,7 @@ get_measures <- function(object,
                 })
         )
       names(smr) <- c("n", "area_sum", "area_mean", "area_sd",  names(res[6:ncol(res)]))
-      smr$img <- object$count$Image
+      smr$img <- object$count$img
       smr <- smr[,c(ncol(smr), 1:ncol(smr)-1)]
       smr$area_sd[is.na(smr$area_sd)] <- 0
       merg <- smr
@@ -523,9 +527,9 @@ plot_measures <- function(object,
     }
 
 
+    hjust <- ifelse(is.null(hjust), 0, hjust)
+    vjust <- ifelse(is.null(vjust), 0, vjust)
     if(measure %in% colnames(object)){
-      hjust <- ifelse(is.null(hjust), 0, hjust)
-      vjust <- ifelse(is.null(vjust), 0, vjust)
       text(x = object[,2] + hjust,
            y = object[,3] - vjust,
            labels = round(object[, which(colnames(object) == measure)], digits),
@@ -533,20 +537,29 @@ plot_measures <- function(object,
            cex = size,
            ...)
     } else{
-      if(!is.null(index)){
+      if (!is.null(index)) {
         measures <- colnames(index)
-        if(!measure %in% measures){
-          stop("'measure' must be one of {", paste(c(colnames(object), measures), collapse = ", "),"}.", call. = FALSE)
+        if (!measure %in% measures) {
+          cli::cli_abort(c(
+            "!" = "{.arg measure} must be one of:",
+            "x" = "{.val {paste(c(colnames(object), measures), collapse = ', ')}}"
+          ))
         }
-        text(x = index[,2],
-             y = index[,3],
-             labels = round(index[, which(colnames(index) == measure)], digits),
-             col = col,
-             cex = size,
-             ...)
-      } else{
-        stop("'measure' must be one of {", paste(colnames(object), collapse = ", "),"}.", call. = FALSE)
+        text(
+          x = index[, 2] + hjust,
+          y = index[, 3] - vjust,
+          labels = round(index[, which(colnames(index) == measure)], digits),
+          col = col,
+          cex = size,
+          ...
+        )
+      } else {
+        cli::cli_abort(c(
+          "!" = "{.arg measure} must be one of:",
+          "x" = "{.val {paste(colnames(object), collapse = ', ')}}"
+        ))
       }
+
     }
 
   } else{
@@ -569,7 +582,7 @@ plot_measures <- function(object,
       object <- object$summary
       colnames(object)[1] <- "id"
     } else{
-      stop("Object of ivalid class.")
+      cli::cli_abort("Object of ivalid class.")
     }
     if(is.null(id)){
       id <- object$id
@@ -577,10 +590,10 @@ plot_measures <- function(object,
       id <- id
     }
     object <- object[which(object$id %in% id), ]
-
+    hjust <- ifelse(is.null(hjust), 0, hjust)
+    vjust <- ifelse(is.null(vjust), 0, vjust)
     if(measure %in% colnames(object)){
-      hjust <- ifelse(is.null(hjust), 0, hjust)
-      vjust <- ifelse(is.null(vjust), 0, vjust)
+
       text(x = object[,2] + hjust,
            y = object[,3] - vjust,
            labels = round(object[, which(colnames(object) == measure)], digits),
@@ -588,20 +601,32 @@ plot_measures <- function(object,
            cex = size,
            ...)
     } else{
-      if(!is.null(index)){
+      if (!is.null(index)) {
         measures <- colnames(index)
-        if(!measure %in% measures){
-          stop("'measure' must be one of {", paste(c(colnames(object), measures), collapse = ", "),"}.", call. = FALSE)
+        if (!measure %in% measures) {
+          cli::cli_abort(c(
+            "!" = "{.arg measure} must be one of:",
+            "x" = "{.val {paste(c(colnames(object), measures), collapse = ', ')}}"
+          ))
         }
-        text(x = object[,2],
-             y = object[,3],
-             labels = round(index[which(index$id %in% object$id), which(colnames(index) == measure)], digits),
-             col = col,
-             cex = size,
-             ...)
-      } else{
-        stop("'measure' must be one of {", paste(colnames(object), collapse = ", "),"}.", call. = FALSE)
+        text(
+          x = object[, 2] + hjust,
+          y = object[, 3] - vjust,
+          labels = round(
+            index[which(index$id %in% object$id), which(colnames(index) == measure)],
+            digits
+          ),
+          col = col,
+          cex = size,
+          ...
+        )
+      } else {
+        cli::cli_abort(c(
+          "!" = "{.arg measure} must be one of:",
+          "x" = "{.val {paste(colnames(object), collapse = ', ')}}"
+        ))
       }
+
     }
   }
 }
@@ -645,7 +670,8 @@ plot_lw <- function(object,
     rest <- object
   }
   if(!all(c("x", "y", "length", "width", "theta") %in% colnames(rest))){
-    stop("`object` must be an object computed with `analyze_objects() or a data.frame with the columns `x`, `y`, `length`, `width`, and `theta`", call. = FALSE)
+    cli::cli_abort("{.arg object} must be computed with {.fn analyze_objects} or be a data frame with the columns {.field x}, {.field y}, {.field length}, {.field width}, and {.field theta}.")
+
   }
   xc <- rest$x
   yc <- rest$y
@@ -734,7 +760,8 @@ summary_index <- function(object,
                           type = "var",
                           ...){
   if(is.null(object$object_index)){
-    stop("'object' was not computed using the `object_index` argument.")
+    cli::cli_abort("{.arg object} was not computed using the {.arg object_index} argument.")
+
   }
   coords <- object$results[2:3]
   obj_in <- check_inf(object$object_index)
@@ -898,8 +925,12 @@ compute_measures <- function(mask,
                              haralick =  FALSE,
                              har_nbins = 32,
                              har_scales = 1,
-                             har_band = "GRAY"){
+                             har_band = "GRAY",
+                             smooth = FALSE){
   ocont <- EBImage::ocontour(mask)
+  if(is.numeric(smooth) & smooth > 0){
+    ocont <- poly_smooth(ocont, niter = smooth, plot = FALSE) |> poly_close()
+  }
   shape <-
     cbind(features_moment(ocont),
           cbind(area = get_area_mask(mask), features_shape(ocont)))

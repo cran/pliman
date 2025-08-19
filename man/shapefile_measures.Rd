@@ -4,11 +4,14 @@
 \alias{shapefile_measures}
 \title{Extract geometric measures from a shapefile object}
 \usage{
-shapefile_measures(shapefile)
+shapefile_measures(shapefile, n = NULL)
 }
 \arguments{
 \item{shapefile}{An \code{sf} object representing the shapefile. It should contain
 polygonal geometries for which the measures will be calculated.}
+
+\item{n}{An integer specifying the number of polygons to process. If \code{NULL},
+all polygons are considered.}
 }
 \value{
 A modified \code{sf} object with added columns for:
@@ -18,7 +21,9 @@ A modified \code{sf} object with added columns for:
 \item \code{area}: The area of the polygon (in square units).
 \item \code{perimeter}: The perimeter of the polygon (in linear units).
 \item \code{width}: The calculated width based on sequential distances between points.
+The result will only be accurate if the polygon is rectangular.
 \item \code{height}: The calculated height based on sequential distances between points.
+The result will only be accurate if the polygon is rectangular.
 }
 }
 \description{

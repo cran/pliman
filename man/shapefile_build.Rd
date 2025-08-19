@@ -15,6 +15,7 @@ shapefile_build(
   grid = TRUE,
   nrow = 1,
   ncol = 1,
+  nsides = 200,
   plot_width = NULL,
   plot_height = NULL,
   layout = "lrtb",
@@ -33,8 +34,9 @@ shapefile_build(
 )
 }
 \arguments{
-\item{mosaic}{A mosaic of class \code{SpatRaster}, generally imported with
-\code{\link[=mosaic_input]{mosaic_input()}}.}
+\item{mosaic}{A \code{SpatRaster} object, typically imported using
+\code{\link[=mosaic_input]{mosaic_input()}}.  If not provided, a latitude/longitude basemap will be
+generated in the "EPSG:4326" coordinate reference system.}
 
 \item{basemap}{An optional \code{mapview} object.}
 
@@ -55,6 +57,8 @@ extension.}
 \item{nrow}{Number of rows for the grid (default: 1).}
 
 \item{ncol}{Number of columns for the grid (default: 1).}
+
+\item{nsides}{The number of sides if the geometry is generated with \verb{Draw Circle} tool.}
 
 \item{plot_width, plot_height}{The width and height of the plot shape (in the
 mosaic unit). It is mutually exclusiv with \code{buffer_col} and \code{buffer_row}.}

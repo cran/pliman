@@ -1,5 +1,27 @@
+# pliman 3.1.0
+## New Functions
+* New functions for geometric operation on shapefiles.
+* New `mosaic_classify()` function to classify orthomosaics based on break values defined by users.
+* New `new image_contour_line()` function allows users to detect smooth contour lines in an image.
+* New `image_canny_edge()` function, which implements Canny Edge detection.
+* New `image_line_segment()` function that enables automatic line segment detection using the Line Segment Detector (LSD) algorithm.
+
+## Minor Improvements
+* Include option to draw circles in `shapefile_build()`
+* Remove dependency on `lwgeom` package to compute perimeter.
+* `mosaic_crop()` now have a `type` argument, that allows returning a cropped or masked raster.
+* `image_autocrop()` now has `threshold` and `invert` arguments.
+* Removed dependencies on **future**, **foreach** and **doFuture** in favour of
+the new **mirai** background engine.  This simplifies installation and delivers
+faster, more reliable parallel processing across all image-based functions.
+* Added **cli**-based messages (rules, progress steps and alerts) throughout both 
+parallel and sequential workflows to provide clear, informative status updates 
+during long-running image processing tasks.
+
 # pliman 3.0.0
 ## New Functions
+* Added the `image_label()` to label binary images with options to control a `max_gap`, ie., the maximum allowable gap (in pixels) between connected components to be considered as part of the same object.
+# pliman 3.0.0
 * Introduced the `mosaic_*()` family of functions for high-throughput phenotyping, enabling efficient analysis of large-scale image data.
 * Added the `shapefile_*()` functions for handling and manipulating shapefiles, providing streamlined spatial data management.
 

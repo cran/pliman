@@ -1,6 +1,11 @@
 #include <RcppArmadillo.h>
 #include <queue>
 #include <cmath>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+#include <random>
+
 using namespace Rcpp;
 using namespace arma;
 
@@ -748,7 +753,6 @@ IntegerMatrix helper_guo_hall(IntegerMatrix image) {
   IntegerMatrix data2 = Rcpp::clone(image);
 
   auto get = [&](int col, int row) { return image(row, col) != 0; };
-  auto set = [&](int col, int row) { data2(row, col) = 255; };
   auto clear = [&](int col, int row) { data2(row, col) = 0; };
 
   IntegerMatrix stepCounter(wid, hgt);
@@ -871,29 +875,268 @@ NumericMatrix rotate_polygon(NumericMatrix coords, double angle, NumericVector c
 }
 
 // [[Rcpp::export]]
-List add_width_height_cpp(List grid, double width, double height, NumericVector points_align) {
-  int n = grid.size();
-  List adjusted_polygons(n);
+CharacterVector add_width_height_cpp(
+    List grid,
+    double width,
+    double height,
+    NumericVector points_align) {
 
-  // Calculate the rotation angle
-  double x1 = points_align[0];
-  double y1 = points_align[2];
-  double x2 = points_align[1];
-  double y2 = points_align[3];
-  double rotation_angle = atan2(y2 - y1, x2 - x1);
+    int n = grid.size();
+    CharacterVector wkt(n);
 
-  for (int i = 0; i < n; ++i) {
-    NumericMatrix coords = as<NumericMatrix>(grid[i]);
-    NumericMatrix new_bbox = adjust_bbox(coords, width, height);
+    // unpack alignment points
+    double x1 = points_align[0], x2 = points_align[1],
+                                                  y1 = points_align[2], y2 = points_align[3];
+    double angle = std::atan2(y2 - y1, x2 - x1);
 
-    // Calculate the centroid of the new bounding box
-    NumericVector bbox_centroid = colMeans(new_bbox(Range(0, 3), _));
+    for(int i = 0; i < n; ++i) {
+      NumericMatrix coords = as<NumericMatrix>(grid[i]);
 
-    // Rotate the bounding box polygon
-    NumericMatrix rotated_coords = rotate_polygon(new_bbox, rotation_angle, bbox_centroid);
+      // 1) build new bbox around centroid
+      NumericMatrix bbox = adjust_bbox(coords, width, height);
 
-    adjusted_polygons[i] = rotated_coords;
+      // 2) compute centroid for rotation
+      NumericVector cent = colMeans(bbox(Range(0,3), _));
+
+      // 3) rotate the bbox
+      NumericMatrix rot = rotate_polygon(bbox, angle, cent);
+
+      // 4) convert to WKT
+      std::ostringstream oss;
+      oss << std::fixed << std::setprecision(6)
+          << "POLYGON((";
+      int m = rot.nrow();
+      for(int j = 0; j < m; ++j) {
+        oss << rot(j,0) << " " << rot(j,1);
+        if(j < m-1) oss << ", ";
+      }
+      oss << "))";
+
+      wkt[i] = oss.str();
+    }
+
+    return wkt;
   }
 
-  return adjusted_polygons;
+// [[Rcpp::export]]
+IntegerMatrix help_label(IntegerMatrix matrix, int max_gap = 2) {
+  int rows = matrix.nrow();
+  int cols = matrix.ncol();
+  IntegerMatrix labels(rows, cols);
+  int current_label = 0;
+
+  // Função auxiliar para verificar se dois pixels estão dentro do gap permitido
+  auto is_within_gap = [&](int r1, int c1, int r2, int c2) {
+    return abs(r1 - r2) <= max_gap && abs(c1 - c2) <= max_gap;
+  };
+
+  // Pilhas para busca em profundidade
+  std::vector<int> stack_r, stack_c;
+
+  // Iterar sobre cada pixel da matriz
+  for (int r = 0; r < rows; ++r) {
+    for (int c = 0; c < cols; ++c) {
+      if (matrix(r, c) == 1 && labels(r, c) == 0) { // Novo objeto encontrado
+        ++current_label;
+        stack_r.push_back(r);
+        stack_c.push_back(c);
+
+        // Rotular os pixels conectados
+        while (!stack_r.empty()) {
+          int cr = stack_r.back();
+          int cc = stack_c.back();
+          stack_r.pop_back();
+          stack_c.pop_back();
+
+          if (labels(cr, cc) == 0) {
+            labels(cr, cc) = current_label;
+
+            // Verificar vizinhos
+            for (int dr = -max_gap; dr <= max_gap; ++dr) {
+              for (int dc = -max_gap; dc <= max_gap; ++dc) {
+                if (abs(dr) + abs(dc) > 0) { // Ignorar o próprio pixel
+                  int nr = cr + dr;
+                  int nc = cc + dc;
+
+                  if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                    if (matrix(nr, nc) == 1 && labels(nr, nc) == 0 && is_within_gap(cr, cc, nr, nc)) {
+                      stack_r.push_back(nr);
+                      stack_c.push_back(nc);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return labels;
+}
+
+// [[Rcpp::export]]
+NumericVector rcpp_st_perimeter(List sf_coords) {
+  int n = sf_coords.size();
+  NumericVector perimeters(n);
+
+  for (int i = 0; i < n; ++i) {
+    List geom = sf_coords[i]; // Get each geometry (may consist of multiple rings)
+    double total_perimeter = 0.0;
+
+    for (int j = 0; j < geom.size(); ++j) {
+      NumericMatrix ring = geom[j]; // Single ring (matrix of coordinates)
+      double ring_perimeter = 0.0;
+      int rows = ring.nrow();
+
+      for (int k = 0; k < rows - 1; ++k) {
+        // Calculate Euclidean distance between consecutive points
+        double dx = ring(k + 1, 0) - ring(k, 0);
+        double dy = ring(k + 1, 1) - ring(k, 1);
+        ring_perimeter += sqrt(dx * dx + dy * dy);
+      }
+
+      total_perimeter += ring_perimeter;
+    }
+    perimeters[i] = total_perimeter;
+  }
+  return perimeters;
+}
+
+// Helper function to generate random hexadecimal characters
+std::string generate_random_hex(int length) {
+  const char hex_chars[] = "0123456789abcdef";
+  std::string result(length, '0');
+  GetRNGstate(); // Inicia o RNG do R
+  for (int i = 0; i < length; i++) {
+    result[i] = hex_chars[(int)(unif_rand() * 16)]; // Gera um índice entre 0 e 15
+  }
+  PutRNGstate(); // Finaliza o RNG do R
+
+  return result;
+}
+
+// [[Rcpp::export]]
+std::string  uuid_v7() {
+  // Step 1: Get current timestamp in milliseconds since Unix epoch
+  auto now = std::chrono::system_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+  long long timestamp = duration.count();
+
+  // Convert timestamp to a hexadecimal string with exactly 12 characters
+  std::stringstream ss;
+  ss << std::hex << std::setw(12) << std::setfill('0') << (timestamp & 0xFFFFFFFFFFFF); // Ensure 12 hex digits
+  std::string timestamp_hex = ss.str();
+
+  // Step 2: Extract components from the timestamp
+  std::string time_low = timestamp_hex.substr(0, 8);  // First 8 hex digits (32 bits)
+  std::string time_mid = timestamp_hex.substr(8, 4);  // Next 4 hex digits (16 bits)
+  std::string time_high_and_version = generate_random_hex(4); // Generate 4 random hex chars
+  time_high_and_version[0] = '7'; // Set the version to 7 (Version 7 UUID)
+
+  // Step 3: Generate the variant and clock sequence
+  std::string variant_and_sequence = generate_random_hex(4);
+  GetRNGstate(); // Inicia o RNG do R para a variante
+  variant_and_sequence[0] = "89ab"[(int)(unif_rand() * 4)]; // Define a variante (8, 9, a, b)
+  PutRNGstate(); // Finaliza o RNG do R
+
+  // Step 4: Generate the node (random bits for uniqueness)
+  std::string node = generate_random_hex(12);
+
+  // Step 5: Combine all components into the UUID structure
+  std::string uuid = time_low + "-" + time_mid + "-" + time_high_and_version +
+    "-" + variant_and_sequence + "-" + node;
+
+  // Ensure UUID is exactly 36 characters long (with 4 hyphens)
+  if (uuid.length() != 36) {
+    throw std::runtime_error("Generated UUID has incorrect length: " + uuid);
+  }
+
+  return uuid;
+}
+
+// [[Rcpp::export]]
+double helper_entropy(NumericVector values, int precision = 2) {
+  std::unordered_map<double, int> freq;
+  int n = values.size();
+
+  // Compute frequencies with rounding
+  double scale = pow(10.0, precision);
+  for (int i = 0; i < n; ++i) {
+    double rounded_val = round(values[i] * scale) / scale;
+    freq[rounded_val]++;
+  }
+
+  // Compute entropy
+  double entropy = 0.0;
+  for (auto& pair : freq) {
+    double prob = static_cast<double>(pair.second) / n;
+    entropy -= prob * log(prob);
+  }
+
+  return entropy;
+}
+
+
+// [[Rcpp::export]]
+CharacterVector corners_to_wkt(List cornersList) {
+  int nPlots = cornersList.size();
+  CharacterVector out(nPlots);
+
+  for (int k = 0; k < nPlots; ++k) {
+    NumericVector v = as<NumericVector>(cornersList[k]);
+    int len = v.size();
+    if (len < 8 || (len % 2) != 0) {
+      stop("Each element must be an even-length numeric vector of at least 8 elements");
+    }
+    int rows = len / 2;
+
+    // build rows×2 matrix of coordinates
+    NumericMatrix m(rows, 2);
+    for (int i = 0; i < rows; ++i) {
+      m(i, 0) = v[i];
+      m(i, 1) = v[i + rows];
+    }
+
+    // take first four unique corners (drop closing point)
+    NumericMatrix c4(4, 2);
+    for (int i = 0; i < 4; ++i) {
+      c4(i, 0) = m(i, 0);
+      c4(i, 1) = m(i, 1);
+    }
+
+    // squared lengths of edges 1–2 and 2–3
+    double dx1 = c4(0,0) - c4(1,0);
+    double dy1 = c4(0,1) - c4(1,1);
+    double d1  = dx1*dx1 + dy1*dy1;
+    double dx2 = c4(1,0) - c4(2,0);
+    double dy2 = c4(1,1) - c4(2,1);
+    double d2  = dx2*dx2 + dy2*dy2;
+
+    // choose longer-opposite edges midpoints
+    double x1, y1, x2, y2;
+    if (d1 < d2) {
+      // edges 1–2 & 3–4 shorter => mids of those
+      x1 = (c4(0,0) + c4(1,0)) * 0.5;
+      y1 = (c4(0,1) + c4(1,1)) * 0.5;
+      x2 = (c4(2,0) + c4(3,0)) * 0.5;
+      y2 = (c4(2,1) + c4(3,1)) * 0.5;
+    } else {
+      // edges 2–3 & 4–1 shorter
+      x1 = (c4(1,0) + c4(2,0)) * 0.5;
+      y1 = (c4(1,1) + c4(2,1)) * 0.5;
+      x2 = (c4(3,0) + c4(0,0)) * 0.5;
+      y2 = (c4(3,1) + c4(0,1)) * 0.5;
+    }
+
+    // format WKT with fixed decimals
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6)
+        << "LINESTRING(" << x1 << " " << y1 << ","
+        << x2 << " " << y2 << ")";
+
+    out[k] = oss.str();
+  }
+
+  return out;
 }

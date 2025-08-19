@@ -2,34 +2,36 @@
 % Please edit documentation in R/utils_mosaic.R
 \name{mosaic_chm_extract}
 \alias{mosaic_chm_extract}
-\title{Extract Canopy Height and Volume}
+\title{Extracts height metrics and plot quality from a Canopy Height Model (CHM)}
 \usage{
-mosaic_chm_extract(chm, shapefile)
+mosaic_chm_extract(chm, shapefile, chm_threshold = NULL)
 }
 \arguments{
-\item{chm}{A list object containing the Canopy Height Model (CHM) generated
-by the \code{\link[=mosaic_chm]{mosaic_chm()}} function.}
+\item{chm}{An object computed with \code{\link[=mosaic_chm]{mosaic_chm()}}.}
 
-\item{shapefile}{An \code{sf} object representing the plot boundaries for which
-the metrics will be extracted.}
+\item{shapefile}{An \code{sf} object containing the polygons over which height
+metrics are extracted.}
+
+\item{chm_threshold}{A numeric value representing the height threshold for
+calculating coverage. If \code{NULL}, coverage is not computed.}
 }
 \value{
-A \code{sf} object with extracted metrics including minimum, 10th
-percentile, median (50th percentile), 90th percentile, interquartile range
-(IQR), mean, maximum canopy height, coefficient of variation (CV) of canopy
-height, canopy height entropy, total volume, covered area, plot area, and
-coverage percentage. Centroid coordinates (x, y) of each plot are also
-included.
+An \code{sf} object containing height summary statistics for each plot,
+including:
+\itemize{
+\item \code{min}: Minimum height value.
+\item \code{q05}: 5th percentile height value.
+\item \code{q50}: Median height value.
+\item \code{q95}: 95th percentile height value.
+\item \code{max}: Maximum height value.
+\item \code{mean}: Mean height value.
+\item \code{volume}: Total sum of heights multiplied by CHM resolution.
+\item \code{coverage}: If a mask is used in \code{\link[=mosaic_chm]{mosaic_chm()}} or \code{chm_threshold} is
+informed, returns the proportion of pixels covered within the plot.
+Otherwise, returns 1.
+}
 }
 \description{
-This function extracts canopy height and volume metrics for given plots
-within a specified shapefile.
-}
-\details{
-The function uses the \code{exactextractr} package to extract canopy height and
-volume metrics from the CHM. For each plot in the shapefile, the function
-computes various statistics on the canopy height values (e.g., min, max,
-percentiles, mean, CV, entropy) and sums the volume values. If a mask was
-applied in the CHM calculation, the covered area and plot area are also
-computed.
+This function extracts height-related summary statistics from a CHM using a
+given shapefile.
 }

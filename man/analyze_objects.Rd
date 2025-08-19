@@ -18,6 +18,7 @@ analyze_objects(
   reference_area = NULL,
   back_fore_index = "R/(G/B)",
   fore_ref_index = "B-R",
+  reference_img = NULL,
   reference_larger = FALSE,
   reference_smaller = FALSE,
   pattern = NULL,
@@ -34,6 +35,7 @@ analyze_objects(
   har_nbins = 32,
   har_scales = 1,
   har_band = 1,
+  smooth = FALSE,
   pcv = FALSE,
   pcv_niter = 100,
   resize = FALSE,
@@ -77,6 +79,7 @@ analyze_objects(
   show_original = TRUE,
   show_chull = FALSE,
   show_contour = TRUE,
+  show_bbox = FALSE,
   contour_col = "red",
   contour_size = 1,
   show_lw = FALSE,
@@ -115,9 +118,10 @@ analyze_objects_iter(pattern, known_area, verbose = TRUE, ...)
 \arguments{
 \item{img}{The image to be analyzed.}
 
-\item{foreground, background}{A color palette for the foregrond and background,
-respectively (optional). If a chacarceter is used (eg., \code{foreground = "fore"}), the function will search in the current working directory a valid
-image named "fore".}
+\item{foreground, background, reference_img}{A color palette for the foregrond,
+background, and reference object, respectively (optional). If a chacarceter
+is used (eg., \code{foreground = "fore"}), the function will search in the
+current working directory a valid image named "fore".}
 
 \item{pick_palettes}{Logical argument indicating wheater the user needs to
 pick up the color palettes for foreground and background for the image. If
@@ -229,6 +233,10 @@ compute the Haralick features. See Details.}
 
 \item{har_band}{The band to compute the Haralick features (1 = R, 2 = G, 3 =
 B). Defaults to 1. Other allowed value is \code{har_band = "GRAY"}.}
+
+\item{smooth}{whether the object contours should be smoothed with
+\code{\link[=poly_smooth]{poly_smooth()}}. Defaults to \code{FALSE}. To smooth use a numeric value
+indicating the number of interactions used to smooth the contours.}
 
 \item{pcv}{Computes the Perimeter Complexity Value? Defaults to \code{FALSE}.}
 
@@ -377,6 +385,8 @@ to \code{NULL} (i.e., no lower and upper limits).}
 
 \item{show_contour}{Show a contour line around the objects? Defaults to
 \code{TRUE}.}
+
+\item{show_bbox}{Show the bounding box around the objects? Defaults to \code{FALSE}.}
 
 \item{contour_col, contour_size}{The color and size for the contour line around
 objects. Defaults to \code{contour_col = "red"} and \code{contour_size = 1}.}
@@ -714,7 +724,7 @@ Classification. IEEE Transactions on Systems, Man, and Cybernetics SMC-3(6): 610
 \doi{10.1109/TSMC.1973.4309314}
 
 Kuhl, F. P., and Giardina, C. R. (1982). Elliptic Fourier features of a
-closed contour. Computer Graphics and Image Processing 18, 236–258. doi:
+closed contour. Computer Graphics and Image Processing 18, 236-258. doi:
 \doi{10.1016/0146-664X(82)90034-X}
 
 Lee, Y., & Lim, W. (2017). Shoelace Formula: Connecting the Area of a Polygon

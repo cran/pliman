@@ -123,10 +123,10 @@
 #' @inheritParams image_index
 #'
 #'@param img The image to be analyzed.
-#'@param foreground,background A color palette for the foregrond and background,
-#'  respectively (optional). If a chacarceter is used (eg., `foreground =
-#'  "fore"`), the function will search in the current working directory a valid
-#'  image named "fore".
+#'@param foreground,background,reference_img A color palette for the foregrond,
+#'  background, and reference object, respectively (optional). If a chacarceter
+#'  is used (eg., `foreground = "fore"`), the function will search in the
+#'  current working directory a valid image named "fore".
 #' @param opening,closing,filter,erode,dilate **Morphological operations (brush size)**
 #'  * `dilate` puts the mask over every background pixel, and sets it to
 #'  foreground if any of the pixels covered by the mask is from the foreground.
@@ -231,6 +231,9 @@
 #'  compute the Haralick features. See Details.
 #'@param har_band The band to compute the Haralick features (1 = R, 2 = G, 3 =
 #'  B). Defaults to 1. Other allowed value is `har_band = "GRAY"`.
+#'@param smooth whether the object contours should be smoothed with
+#'  [poly_smooth()]. Defaults to `FALSE`. To smooth use a numeric value
+#'  indicating the number of interactions used to smooth the contours.
 #' @param pcv Computes the Perimeter Complexity Value? Defaults to `FALSE`.
 #' @param pcv_niter An integer specifying the number of smoothing iterations for
 #'   computing the  Perimeter Complexity Value. Defaults to 100.
@@ -312,6 +315,7 @@
 #'  `FALSE`.
 #'@param show_contour Show a contour line around the objects? Defaults to
 #'  `TRUE`.
+#'@param show_bbox Show the bounding box around the objects? Defaults to `FALSE`.
 #'@param contour_col,contour_size The color and size for the contour line around
 #'  objects. Defaults to `contour_col = "red"` and `contour_size = 1`.
 #'@param show_lw If `TRUE`, plots the length and width lines on each object
@@ -483,7 +487,7 @@
 #' \doi{10.1109/TSMC.1973.4309314}
 #'
 #' Kuhl, F. P., and Giardina, C. R. (1982). Elliptic Fourier features of a
-#' closed contour. Computer Graphics and Image Processing 18, 236–258. doi:
+#' closed contour. Computer Graphics and Image Processing 18, 236-258. doi:
 #' \doi{10.1016/0146-664X(82)90034-X}
 #'
 #' Lee, Y., & Lim, W. (2017). Shoelace Formula: Connecting the Area of a Polygon
@@ -556,6 +560,7 @@ analyze_objects <- function(img,
                             reference_area = NULL,
                             back_fore_index = "R/(G/B)",
                             fore_ref_index = "B-R",
+                            reference_img = NULL,
                             reference_larger = FALSE,
                             reference_smaller = FALSE,
                             pattern = NULL,
@@ -572,6 +577,7 @@ analyze_objects <- function(img,
                             har_nbins = 32,
                             har_scales = 1,
                             har_band = 1,
+                            smooth = FALSE,
                             pcv = FALSE,
                             pcv_niter = 100,
                             resize = FALSE,
@@ -615,6 +621,7 @@ analyze_objects <- function(img,
                             show_original = TRUE,
                             show_chull = FALSE,
                             show_contour = TRUE,
+                            show_bbox = FALSE,
                             contour_col = "red",
                             contour_size = 1,
                             show_lw = FALSE,
@@ -632,12 +639,14 @@ analyze_objects <- function(img,
                             verbose = TRUE){
   check_ebi()
   lower_noise <- ifelse(isTRUE(reference_larger), lower_noise * 3, lower_noise)
-  if(!object_size %in% c("small", "medium", "large", "elarge")){
-    stop("'object_size' must be one of 'small', 'medium', 'large', or 'elarge'")
+  if (!object_size %in% c("small", "medium", "large", "elarge")) {
+    cli::cli_abort("Argument {.arg object_size} must be one of {.val small}, {.val medium}, {.val large}, or {.val elarge}.")
   }
-  if(!missing(img) & !missing(pattern)){
-    stop("Only one of `img` or `pattern` arguments can be used.", call. = FALSE)
+
+  if (!missing(img) && !missing(pattern)) {
+    cli::cli_abort("Only one of {.arg img} or {.arg pattern} can be used.")
   }
+
   if(is.null(dir_original)){
     diretorio_original <- paste0("./")
   } else{
@@ -673,13 +682,13 @@ analyze_objects <- function(img,
       }
       if(trim != FALSE){
         if(!is.numeric(trim)){
-          stop("Argument `trim` must be numeric.", call. = FALSE)
+          cli::cli_abort("Argument {.arg trim} must be numeric.")
         }
         img <- image_trim(img, trim)
       }
       if(resize != FALSE){
         if(!is.numeric(resize)){
-          stop("Argument `resize` must be numeric.", call. = FALSE)
+          cli::cli_abort("Argument {.arg resize} must be numeric.")
         }
         img <- image_resize(img, resize)
       }
@@ -694,7 +703,7 @@ analyze_objects <- function(img,
               plot(img)
             }
             if(viewopt == "base"){
-              message("Use the first mouse button to pick up BACKGROUND colors. Press Est to exit")
+              cli::cli_alert_info("Use the first mouse button to pick up {.strong BACKGROUND} colors. Press ESC to exit.")
             }
             background <- pick_palette(img,
                                        r = 5,
@@ -702,13 +711,14 @@ analyze_objects <- function(img,
                                        palette  = FALSE,
                                        plot = FALSE,
                                        col = "blue",
+                                       external_device = FALSE,
                                        title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
                                        viewer = viewer)
             if(viewopt != "base"){
               image_view(img[1:10, 1:10,], edit = TRUE)
             }
             if(viewopt == "base"){
-              message("Use the first mouse button to pick up FOREGROUND colors. Press Est to exit")
+              cli::cli_alert_info("Use the first mouse button to pick up {.strong FOREGROUND} colors. Press ESC to exit.")
             }
             foreground <- pick_palette(img,
                                        r = 5,
@@ -716,6 +726,7 @@ analyze_objects <- function(img,
                                        palette  = FALSE,
                                        plot = FALSE,
                                        col = "salmon",
+                                       external_device = FALSE,
                                        title = "Use the first mouse button to pick up FOREGROUND colors. Click 'Done' to finish",
                                        viewer = viewer)
           }
@@ -837,7 +848,8 @@ analyze_objects <- function(img,
                                   haralick = haralick,
                                   har_nbins = har_nbins,
                                   har_scales = har_scales,
-                                  har_band = har_band)
+                                  har_band = har_band,
+                                  smooth = smooth)
         object_contour <- shape$cont
         ch <- shape$ch
         shape <- shape$shape
@@ -845,7 +857,7 @@ analyze_objects <- function(img,
       } else{
         # when reference is used
         if(is.null(reference_area)){
-          stop("A known area must be declared when a template is used.", call. = FALSE)
+          cli::cli_abort("A known {.strong area} must be declared when a {.strong template} is used.")
         }
         if(isFALSE(reference_larger) & isFALSE(reference_smaller)){
           # segment back and fore
@@ -854,24 +866,99 @@ analyze_objects <- function(img,
           } else{
             invert1 <- FALSE
           }
-          img_bf <-
-            help_binary(img,
-                        threshold = threshold,
-                        index = back_fore_index,
-                        erode = erode,
-                        dilate = dilate,
-                        opening = opening,
-                        closing = closing,
-                        filter = filter,
-                        r = r,
-                        g = g,
-                        b = b,
-                        re = re,
-                        nir = nir,
-                        k = k,
-                        windowsize = windowsize,
-                        invert = invert1,
-                        fill_hull = fill_hull)
+          if(!is.null(background) & !is.null(foreground) & !is.null(reference_img)){
+            if(is.character(foreground)){
+              all_files <- sapply(list.files(getwd()), file_name)
+              imag <- list.files(getwd(), pattern = foreground)
+              check_names_dir(foreground, all_files, getwd())
+              name <- file_name(imag)
+              extens <- file_extension(imag)
+              foreground <- image_import(paste(getwd(), "/", name, ".", extens, sep = ""))
+            }
+            if(is.character(background)){
+              all_files <- sapply(list.files(getwd()), file_name)
+              imag <- list.files(getwd(), pattern = background)
+              check_names_dir(background, all_files, getwd())
+              name <- file_name(imag)
+              extens <- file_extension(imag)
+              background <- image_import(paste(getwd(), "/", name, ".", extens, sep = ""))
+            }
+            if(is.character(reference_img)){
+              all_files <- sapply(list.files(getwd()), file_name)
+              imag <- list.files(getwd(), pattern = reference_img)
+              check_names_dir(reference_img, all_files, getwd())
+              name <- file_name(imag)
+              extens <- file_extension(imag)
+              reference_img <- image_import(paste(getwd(), "/", name, ".", extens, sep = ""))
+            }
+            original <-
+              data.frame(CODE = "img",
+                         R = c(img@.Data[,,1]),
+                         G = c(img@.Data[,,2]),
+                         B = c(img@.Data[,,3]))
+            fore <-
+              data.frame(CODE = "foreground",
+                         R = c(foreground@.Data[,,1]),
+                         G = c(foreground@.Data[,,2]),
+                         B = c(foreground@.Data[,,3]))
+            ref <-
+              data.frame(CODE = "reference",
+                         R = c(reference_img@.Data[,,1]),
+                         G = c(reference_img@.Data[,,2]),
+                         B = c(reference_img@.Data[,,3]))
+            back <-
+              data.frame(CODE = "background",
+                         R = c(background@.Data[,,1]),
+                         G = c(background@.Data[,,2]),
+                         B = c(background@.Data[,,3]))
+            back_fore <-
+              transform(rbind(fore[sample(1:nrow(fore)),][1:1000,],
+                              ref[sample(1:nrow(ref)),][1:1000,],
+                              back[sample(1:nrow(back)),][1:1000,]),
+                        Y = ifelse(CODE == "background", 0, 1))
+
+            formula <- as.formula(paste("Y ~ ", "R+G+B"))
+
+            modelo1 <- suppressWarnings(glm(formula,
+                                            family = binomial("logit"),
+                                            data = back_fore))
+            img_bf <- EBImage::Image(matrix(round(predict(modelo1, newdata = original, type="response"), 0), ncol = dim(img)[[2]]))
+            if(!isFALSE(filter) & filter > 1){
+              img_bf <- EBImage::medianFilter(img_bf, filter)
+            }
+            if(is.numeric(erode) & erode > 0){
+              img_bf <- image_erode(img_bf, size = erode)
+            }
+            if(is.numeric(dilate) & dilate > 0){
+              img_bf <- image_dilate(img_bf, size = dilate)
+            }
+            if(is.numeric(opening) & opening > 0){
+              img_bf <- image_opening(img_bf, size = opening)
+            }
+            if(is.numeric(closing) & closing > 0){
+              img_bf <- image_closing(img_bf, size = closing)
+            }
+          } else{
+            img_bf <-
+              help_binary(img,
+                          threshold = threshold,
+                          index = back_fore_index,
+                          erode = erode,
+                          dilate = dilate,
+                          opening = opening,
+                          closing = closing,
+                          filter = filter,
+                          r = r,
+                          g = g,
+                          b = b,
+                          re = re,
+                          nir = nir,
+                          k = k,
+                          windowsize = windowsize,
+                          invert = invert1,
+                          fill_hull = fill_hull)
+          }
+
           img3 <- img
           img3@.Data[,,1][which(img_bf != 1)] <- 2
           img3@.Data[,,2][which(img_bf != 1)] <- 2
@@ -884,23 +971,54 @@ analyze_objects <- function(img,
           } else{
             invert2 <- FALSE
           }
-          img4 <-
-            help_binary(img3,
-                        threshold = threshold,
-                        index = fore_ref_index,
-                        r = r,
-                        g = g,
-                        b = b,
-                        re = re,
-                        nir = nir,
-                        erode = erode,
-                        dilate = dilate,
-                        opening = opening,
-                        closing = closing,
-                        filter = filter,
-                        k = k,
-                        windowsize = windowsize,
-                        invert = invert2)
+          if(!is.null(background) & !is.null(foreground) & !is.null(reference_img)){
+            back_fore <-
+              transform(rbind(fore[sample(1:nrow(fore)),][1:1000,],
+                              ref[sample(1:nrow(ref)),][1:1000,],
+                              back[sample(1:nrow(back)),][1:1000,]),
+                        Y = ifelse(CODE == "reference", 0, 1))
+
+            formula <- as.formula(paste("Y ~ ", "R+G+B"))
+
+            modelo1 <- suppressWarnings(glm(formula,
+                                            family = binomial("logit"),
+                                            data = back_fore))
+            img4 <- EBImage::Image(matrix(round(predict(modelo1, newdata = original, type="response"), 0), ncol = dim(img)[[2]]))
+            if(!isFALSE(filter) & filter > 1){
+              img4 <- EBImage::medianFilter(img4, filter)
+            }
+            if(is.numeric(erode) & erode > 0){
+              img4 <- image_erode(img4, size = erode)
+            }
+            if(is.numeric(dilate) & dilate > 0){
+              img4 <- image_dilate(img4, size = dilate)
+            }
+            if(is.numeric(opening) & opening > 0){
+              img4 <- image_opening(img4, size = opening)
+            }
+            if(is.numeric(closing) & closing > 0){
+              img4 <- image_closing(img4, size = closing)
+            }
+          } else{
+            img4 <-
+              help_binary(img3,
+                          threshold = threshold,
+                          index = fore_ref_index,
+                          r = r,
+                          g = g,
+                          b = b,
+                          re = re,
+                          nir = nir,
+                          erode = erode,
+                          dilate = dilate,
+                          opening = opening,
+                          closing = closing,
+                          filter = filter,
+                          k = k,
+                          windowsize = windowsize,
+                          invert = invert2)
+          }
+
           mask <- img_bf
           pix_ref <- which(img4 != 1)
           img@.Data[,,1][pix_ref] <- 1
@@ -959,7 +1077,7 @@ analyze_objects <- function(img,
                   plot(img)
                 }
                 if(viewopt == "base"){
-                  message("Use the first mouse button to pick up BACKGROUND colors. Press Est to exit")
+                  cli::cli_alert_info("Use the first mouse button to pick up {.strong BACKGROUND} colors. Press ESC to exit.")
                 }
                 background <- pick_palette(img,
                                            r = 5,
@@ -967,13 +1085,14 @@ analyze_objects <- function(img,
                                            palette  = FALSE,
                                            plot = FALSE,
                                            col = "blue",
+                                           external_device = FALSE,
                                            title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
                                            viewer = viewer)
                 if(viewopt != "base"){
                   image_view(img[1:10, 1:10,], edit = TRUE)
                 }
                 if(viewopt == "base"){
-                  message("Use the first mouse button to pick up FOREGROUND colors. Press Est to exit")
+                  cli::cli_alert_info("Use the first mouse button to pick up {.strong FOREGROUND} colors. Press ESC to exit.")
                 }
                 foreground <- pick_palette(img,
                                            r = 5,
@@ -981,6 +1100,7 @@ analyze_objects <- function(img,
                                            palette  = FALSE,
                                            plot = FALSE,
                                            col = "salmon",
+                                           external_device = FALSE,
                                            title = "Use the first mouse button to pick up FOREGROUND colors. Click 'Done' to finish",
                                            viewer = viewer)
               }
@@ -1136,9 +1256,8 @@ analyze_objects <- function(img,
       }
 
 
-
       if(!is.null(lower_size) & !is.null(topn_lower) | !is.null(upper_size) & !is.null(topn_upper)){
-        stop("Only one of 'lower_*' or 'topn_*' can be used.")
+        cli::cli_abort("x" = "Only one of {.arg lower_*} or {.arg topn_*} can be used.")
       }
       ifelse(!is.null(lower_size),
              shape <- shape[shape$area > lower_size, ],
@@ -1227,7 +1346,7 @@ analyze_objects <- function(img,
       if(!is.null(object_index)){
         object_index_used <- object_index[1]
         if(!is.character(object_index)){
-          stop("`object_index` must be a character.", call. = FALSE)
+          cli::cli_abort("{.arg object_index} must be a character.")
         }
         ind <- read.csv(file=system.file("indexes.csv", package = "pliman", mustWork = TRUE), header = T, sep = ";")
         if(any(object_index %in% ind$Index)){
@@ -1349,11 +1468,13 @@ analyze_objects <- function(img,
         }
         show_mark <- ifelse(isFALSE(marker), FALSE, TRUE)
         marker <- ifelse(is.null(marker), "id", marker)
-        if(!isFALSE(show_mark) & marker != "point" & !marker %in% colnames(shape)){
-          warning("Accepted 'marker' are: {", paste(colnames(shape), collapse = ", "),
-                  "}. Drawing the object id.", call. = FALSE)
+        if (!isFALSE(show_mark) && marker != "point" && !marker %in% colnames(shape)) {
+          cli::cli_warn(
+            "Accepted {.arg marker} values are: {.val {paste(colnames(shape), collapse = \", \")}}. Drawing the object id instead."
+          )
           marker <- "id"
         }
+
         marker_col <- ifelse(is.null(marker_col), "white", marker_col)
         marker_size <- ifelse(is.null(marker_size), 0.75, marker_size)
         # correct the contour
@@ -1366,6 +1487,9 @@ analyze_objects <- function(img,
             plot(im2)
             if(isTRUE(show_contour) & isTRUE(show_original)){
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
+            }
+            if(show_bbox){
+              plot_bbox(object_contour, col = contour_col)
             }
             if(show_mark){
               text(shape[, 2] + 1,
@@ -1381,6 +1505,9 @@ analyze_objects <- function(img,
             plot(im2)
             if(isTRUE(show_contour)  & isTRUE(show_original)){
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
+            }
+            if(show_bbox){
+              plot_bbox(object_contour, col = contour_col)
             }
             if(show_mark){
               points(shape[, 2] + 1,
@@ -1415,6 +1542,9 @@ analyze_objects <- function(img,
             if(isTRUE(show_contour) & isTRUE(show_original)){
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
             }
+            if(show_bbox){
+              plot_bbox(object_contour, col = contour_col)
+            }
             if(show_mark){
               text(shape[, 2] + 1,
                    shape[, 3] + 1,
@@ -1426,6 +1556,9 @@ analyze_objects <- function(img,
             plot(im2)
             if(isTRUE(show_contour) & isTRUE(show_original)){
               plot_contour(object_contour, col = contour_col, lwd = contour_size)
+            }
+            if(show_bbox){
+              plot_bbox(object_contour, col = contour_col)
             }
             if(show_mark){
               points(shape[, 2] + 1,
@@ -1449,72 +1582,115 @@ analyze_objects <- function(img,
     }
 
   if(missing(pattern)){
+    if(verbose){
+      cli::cli_progress_step(
+        msg = "Processing a single image. Please, wait.",
+        msg_done = "Image {.emph Successfully} analyzed!",
+        msg_failed = "Oops, something went wrong."
+      )
+    }
     help_count(img, foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate,  opening, closing, filter,
                tolerance , extension, randomize, nrows, plot, show_original,
                show_background, marker, marker_col, marker_size, save_image, prefix,
                dir_original, dir_processed, verbose, col_background,
                col_foreground, lower_noise, ab_angles, ab_angles_percentiles, width_at, width_at_percentiles, return_mask, pcv)
   } else{
-    if(pattern %in% c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")){
+    if(pattern %in% as.character(0:9)){
       pattern <- "^[0-9].*$"
     }
     plants <- list.files(pattern = pattern, diretorio_original)
     extensions <- as.character(sapply(plants, file_extension))
     names_plant <- as.character(sapply(plants, file_name))
-    if(length(grep(pattern, names_plant)) == 0){
-      stop(paste("Pattern '", pattern, "' not found in '",
-                 paste(getwd(), sub(".", "", diretorio_original), sep = ""), "'", sep = ""),
-           call. = FALSE)
-    }
-    if(!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))){
-      stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
-    }
-    if(parallel == TRUE){
-      init_time <- Sys.time()
-      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.3), workers)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
+    imgpath <- file.path(getwd(), sub('./', '', diretorio_original)) |> trunc_path(max_chars = 50)
 
-      if(verbose == TRUE){
-        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
+    if (length(grep(pattern, names_plant)) == 0) {
+      cli::cli_abort("Pattern {.val {pattern}} not found in directory {.path {imgpath}}.")
+    }
+
+    allowed_ext <- c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF")
+
+    if (!all(extensions %in% allowed_ext)) {
+      cli::cli_abort("Allowed extensions are {.val {allowed_ext}}.")
+    }
+
+    old_opt <- options(cli.progress_bar_style = "bar")
+    on.exit(options(old_opt), add = TRUE)
+
+
+    if (parallel == TRUE) {
+      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores() * 0.3), workers)
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0))
+      if (verbose) {
+        cli::cli_rule(
+          left = cli::col_blue("Parallel processing using {nworkers} cores"),
+          right = cli::col_blue("Started on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+        )
+        cli::cli_progress_step(
+          msg = "Processing {.val {length(names_plant)}} images found on {.path {imgpath}}. Please, wait.",
+          msg_done = "Batch processing finished",
+          msg_failed = "Oops, something went wrong."
+        )
       }
 
-      results <-
-        foreach::foreach(i = seq_along(names_plant)) %dofut%{
-          help_count(names_plant[i],
-                     foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate, opening, closing, filter,
-                     tolerance , extension, randomize, nrows, plot, show_original,
-                     show_background, marker, marker_col, marker_size, save_image, prefix,
-                     dir_original, dir_processed, verbose, col_background,
-                     col_foreground, lower_noise, ab_angles, ab_angles_percentiles, width_at, width_at_percentiles, return_mask, pcv)
-        }
-
-    } else{
-      init_time <- Sys.time()
-      pb <- progress(max = length(plants), style = 4)
-      foo <- function(plants, ...){
-        if(verbose == TRUE){
-          run_progress(pb, ...)
-        }
-        help_count(img  = plants,
-                   foreground, background, pick_palettes, resize, fill_hull, threshold, erode, dilate, opening, closing, filter,
-                   tolerance , extension, randomize, nrows, plot, show_original,
-                   show_background, marker, marker_col, marker_size, save_image, prefix,
-                   dir_original, dir_processed, verbose, col_background,
-                   col_foreground, lower_noise, ab_angles, ab_angles_percentiles, width_at, width_at_percentiles, return_mask, pcv)
+      # Cria uma função wrapper com todos os argumentos
+      process_image <- function(img) {
+        help_count(
+          img = img,
+          foreground, background, pick_palettes, resize, fill_hull, threshold,
+          erode, dilate, opening, closing, filter, tolerance, extension,
+          randomize, nrows, plot, show_original, show_background, marker,
+          marker_col, marker_size, save_image, prefix, dir_original,
+          dir_processed, verbose, col_background, col_foreground,
+          lower_noise, ab_angles, ab_angles_percentiles,
+          width_at, width_at_percentiles, return_mask, pcv
+        )
       }
-      results <-
-        lapply(seq_along(names_plant), function(i){
-          foo(names_plant[i],
-              actual = i,
-              text = paste("Processing image", names_plant[i]))
-        })
+      results <- mirai::mirai_map(
+        .x = names_plant,
+        .f = process_image
+      )[.progress]
+
+    } else {
+      if (verbose) {
+        cli::cli_rule(
+          left = cli::col_blue("Analyzing {length(names_plant)} images"),
+          right = cli::col_blue("Started at {format(Sys.time(), '%H:%M:%S')}")
+        )
+        cli::cli_alert_info("Directory: {.path {imgpath}}")
+
+        cli::cli_progress_bar(
+          format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta} | {.val {cli::pb_status}}",
+          total = length(names_plant),
+          clear = FALSE
+        )
+      }
+      results <- vector("list", length(names_plant))
+      for (i in seq_along(names_plant)) {
+        if (verbose) cli::cli_progress_update(status = names_plant[i])
+        results[[i]] <-
+          help_count(
+            img = names_plant[i],
+            foreground, background, pick_palettes, resize, fill_hull, threshold,
+            erode, dilate, opening, closing, filter, tolerance, extension,
+            randomize, nrows, plot, show_original, show_background, marker,
+            marker_col, marker_size, save_image, prefix, dir_original,
+            dir_processed, verbose, col_background, col_foreground,
+            lower_noise, ab_angles, ab_angles_percentiles,
+            width_at, width_at_percentiles, return_mask, pcv
+          )
+      }
+      if (verbose) {
+        cli::cli_progress_done()
+      }
     }
 
     ## bind the results
-    names(results) <- names_plant
+    if(verbose){
+      cli::cli_progress_step("Binding the results.", spinner = TRUE)
+    }
 
+    names(results) <- names_plant
     stats <-
       do.call(rbind,
               lapply(seq_along(results), function(i){
@@ -1548,8 +1724,6 @@ analyze_objects <- function(img,
       obj_rgb <- NULL
       object_index <- NULL
     }
-
-
 
     if(!isFALSE(efourier)){
       efourier <-
@@ -1682,21 +1856,102 @@ analyze_objects <- function(img,
     if("img" %in% colnames(results)){
       results <- results[, c(ncol(results), 1:ncol(results) - 1)]
     }
-    summ <- stats[stats$stat == "n", c(1, 3)]
-    names(summ) <- c("Image", "Objects")
-    if(verbose == TRUE){
-      cat("--------------------------------------------\n")
-      print(summ, row.names = FALSE)
-      cat("--------------------------------------------\n")
-      message("Done!")
-      message("Elapsed time: ", sec_to_hms(as.numeric(difftime(Sys.time(),  init_time, units = "secs"))))
+    nimages <- length(unique(stats$id))
+    n_img <-
+      results |>
+      dplyr::group_by(img) |>
+      dplyr::summarise(
+        n = dplyr::n(),
+        area_mean = mean(area, na.rm = TRUE),
+        area_min = min(area, na.rm = TRUE),
+        area_max = max(area, na.rm = TRUE),
+        area_sum = sum(area, na.rm = TRUE),
+        area_sd = sd(area, na.rm = TRUE)
+      )
 
+
+    if(verbose == TRUE){
+      average_n <- mean(n_img$n)
+      min_n <- min(n_img$n)
+      max_n <- max(n_img$n)
+      average_area <- mean(n_img$area_mean)
+      min_area <- min(n_img$area_max)
+      max_area <- max(n_img$area_min)
+
+      # Global statistics
+      glob_stat <- cli::ansi_columns(
+        paste(
+          c(
+            "Total objects:",
+            "Total area:",
+            "Overall mean area:",
+            "Overall SD:",
+            "Min area:",
+            "Max area:"
+          ),
+          c(
+            sum(n_img$n),
+            round(sum(n_img$area_sum, na.rm = TRUE), 2),
+            round(mean(results$area, na.rm = TRUE), 2),
+            round(sd(results$area, na.rm = TRUE), 2),
+            round(min(results$area, na.rm = TRUE), 2),
+            round(max(results$area, na.rm = TRUE), 2)
+          )
+        ),
+        width = 60,
+        fill = "rows",
+        align = "left",
+        sep = "",
+        max_cols = 2
+      )
+      cli::boxx(glob_stat, header = "Global statistics ")  |> cat(sep = "\n")
+
+      cross_imgstat <-
+        cli::ansi_columns(
+          paste(
+            c(
+              "Avg objects:",
+              "Avg sum area:",
+              "Min objects:",
+              "Max objects:",
+              "Avg area:",
+              "Avg SD area:",
+              "Min mean area:",
+              "Max mean area:"
+            ),
+            c(
+              round(mean(n_img$n), 2),
+              round(mean(n_img$area_sum, na.rm = TRUE), 2),
+              min(n_img$n),
+              max(n_img$n),
+              round(mean(n_img$area_mean, na.rm = TRUE), 2),
+              round(mean(n_img$area_sd, na.rm = TRUE), 2),
+              round(min(n_img$area_mean, na.rm = TRUE), 2),
+              round(max(n_img$area_mean, na.rm = TRUE), 2)
+            )
+          ),
+          width = 60,
+          fill = "rows",
+          align = "left",
+          sep = "",
+          max_cols = 2
+        )
+
+      cli::boxx(cross_imgstat,
+                header = "Across-image statistics (per-image averages)",
+                footer = paste0("Based on ", nimages, " images")) |>
+        cat(sep = "\n")
+
+      cli::cli_rule(
+        left = cli::col_blue("Processing successfully finished"),
+        right = cli::col_blue("on {format(Sys.time(), format = '%Y-%m-%d | %H:%M:%OS0')}")
+      )
     }
 
     invisible(
       structure(
-        list(statistics = stats,
-             count = summ,
+        list(statistics = n_img,
+             count = stats[stats$stat == "n", c(1, 3)],
              results = results,
              obj_rgb = obj_rgb,
              object_index = object_index,
@@ -1753,13 +2008,16 @@ plot.anal_obj <- function(x,
                           type = c("density", "histogram"),
                           ...){
   if(!which %in% c("measure", "index")){
-    stop("'which' must be one of 'measure' or 'index'", call. = FALSE)
+    cli::cli_abort("{.arg which} must be one of {.val measure} or {.val index}.")
   }
   if(which == "measure"){
     nam <- colnames(x$results)
     if(!measure %in% nam){
-      stop("Measure '", measure, "' not available in 'x'. Try one of the '",
-           paste0(nam, collapse = ", "), call. = FALSE)
+      cli::cli_abort(c(
+        "x" = "Measure {.val {measure}} not available in {.arg x}.",
+        "i" = "Try one of {.val {paste(nam, collapse = \", \")}}."
+      ))
+
     }
     temp <- x$results[[measure]]
     types <- c("density", "histogram")
@@ -1775,7 +2033,10 @@ plot.anal_obj <- function(x,
   } else{
     rgb <- x$object_rgb
     if(is.null(rgb)){
-      stop("RGB values not found. Use `object_index` in the function `analyze_objects()`.\nHave you accidentally missed the argument `pixel_level_index = TRUE`?", call. = FALSE)
+      cli::cli_abort(c(
+        "x" = "RGB values not found. Use {.arg object_index} in {.fn analyze_objects}().",
+        "i" = "Have you accidentally missed the {.arg pixel_level_index} = TRUE argument?"
+      ))
     }
     plot(density(rgb$R),
          main = NA,
@@ -1803,14 +2064,17 @@ plot.anal_obj_ls <- function(x,
                              type = c("density", "histogram"),
                              ...){
   if(!which %in% c("measure", "index")){
-    stop("'which' must be one of 'measure' or 'index'", call. = FALSE)
+    cli::cli_abort("{.arg which} must be one of {.val measure} or {.val index}.")
   }
   if(which == "measure"){
     nam <- colnames(x$results)
-    if(!measure %in% nam){
-      stop("Measure '", measure, "' not available in 'x'. Try one of the '",
-           paste0(nam, collapse = ", "), call. = FALSE)
+    if (!measure %in% nam) {
+      cli::cli_abort(c(
+        "x" = "Measure {.val {measure}} not available in {.arg x}.",
+        "i" = "Try one of {.val {paste(nam, collapse = \", \")}}."
+      ))
     }
+
     temp <- x$results[[measure]]
     types <- c("density", "histogram")
     matches <- grepl(type[1], types)
@@ -1824,9 +2088,13 @@ plot.anal_obj_ls <- function(x,
     }
   } else{
     rgb <- x$object_rgb
-    if(is.null(rgb)){
-      stop("RGB values not found. Use `object_index` in the function `analyze_objects()`.\nHave you accidentally missed the argument `pixel_level_index = TRUE`?", call. = FALSE)
+    if (is.null(rgb)) {
+      cli::cli_abort(c(
+        "x" = "RGB values not found. Use {.arg object_index} in {.fn analyze_objects}().",
+        "i" = "Have you accidentally missed the {.arg pixel_level_index} = TRUE argument?"
+      ))
     }
+
     plot(density(rgb$R),
          main = NA,
          col = "red",

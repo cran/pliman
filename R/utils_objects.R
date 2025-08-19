@@ -37,6 +37,9 @@
 #'
 #'   Hierarchically, the operations are performed as opening > closing > filter.
 #'   The value declared in each argument will define the brush size.
+#'@param smooth whether the object contours should be smoothed with
+#'  [poly_smooth()]. Defaults to `FALSE`. To smooth use a numeric value
+#'  indicating the number of interactions used to smooth the contours.
 #' @param fill_hull Fill holes in the objects? Defaults to `FALSE`.
 #' @param watershed If `TRUE` (default) performs watershed-based object
 #'   detection. This will detect objects even when they are touching one other.
@@ -103,22 +106,43 @@ object_coord <- function(img,
                          object_size = "medium",
                          parallel = FALSE,
                          workers = NULL,
-                         plot = TRUE){
+                         plot = TRUE,
+                         verbose = TRUE){
   if(inherits(img, "list")){
     if(!all(sapply(img, class) == "Image")){
-      stop("All images must be of class 'Image'")
+      cli::cli_abort("All images must be of class {.cls Image}")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
-      message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-        foreach::foreach(i = seq_along(img)) %dofut%{
-          object_coord(img[[i]], id, index, invert,
-                       fill_hull, threshold, edge, extension, tolerance,
-                       object_size, plot)
+      # decide number of workers
+      nworkers <- ifelse(is.null(workers),
+                         trunc(parallel::detectCores() * 0.5),
+                         workers)
+
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
+
+      # CLI info + progress step
+      if (verbose) {
+        cli::cli_progress_step(
+          msg        = "Processing {.val {length(img)}} images in parallel...",
+          msg_done   = "All object coordinates extracted.",
+          msg_failed = "Object coordinate extraction failed."
+        )
+      }
+
+      # run object_coord in parallel
+      results <- mirai::mirai_map(
+        .x = img,
+        .f = function(im) {
+          pliman::object_coord(
+            im, id, index, invert,
+            fill_hull, threshold, edge, extension, tolerance,
+            object_size, plot
+          )
         }
+      )[.progress]
+
     } else{
       lapply(img, object_coord, id, index, invert, fill_hull, threshold,
              edge, extension, tolerance, object_size, plot)
@@ -198,6 +222,7 @@ object_contour <- function(img,
                            closing = FALSE,
                            filter = FALSE,
                            fill_hull = FALSE,
+                           smooth = FALSE,
                            threshold = "Otsu",
                            watershed = TRUE,
                            extension = NULL,
@@ -218,22 +243,49 @@ object_contour <- function(img,
 
   if(is.null(pattern) && inherits(img, "list")){
     if(!all(sapply(img, class) == "Image")){
-      stop("All images must be of class 'Image'")
+      cli::cli_abort("All images must be of class {.cls Image}.")
     }
     if(parallel == TRUE){
       nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
 
-      message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-        foreach::foreach(i = seq_along(img)) %dofut%{
-          object_contour(img[[i]],
-                         pattern, dir_original, center, index, invert, opening, closing, filter, fill_hull, threshold,
-                         watershed, extension, tolerance, object_size, plot = plot)
+      # inform user
+      cli::cli_alert_info("Image processing using multiple sessions ({.val {nworkers}}). Please wait.")
+      cli::cli_progress_step(
+        msg        = "Processing {.val {length(img)}} images in parallel...",
+        msg_done   = "Object contour extraction complete.",
+        msg_failed = "Object contour extraction failed."
+      )
+
+      # run object_contour in parallel
+      results <- mirai::mirai_map(
+        .x = img,
+        .f = function(im) {
+          pliman::object_contour(
+            im,
+            pattern       = pattern,
+            dir_original  = dir_original,
+            center        = center,
+            index         = index,
+            invert        = invert,
+            opening       = opening,
+            closing       = closing,
+            filter        = filter,
+            fill_hull     = fill_hull,
+            smooth        = smooth,
+            threshold     = threshold,
+            watershed     = watershed,
+            extension     = extension,
+            tolerance     = tolerance,
+            object_size   = object_size,
+            plot          = plot
+          )
         }
+      )[.progress]
     } else{
-      lapply(img, object_contour, pattern, dir_original, center, index, invert, opening, closing, filter, fill_hull, threshold,
+      lapply(img, object_contour, pattern, dir_original, center, index, invert, opening, closing, filter, fill_hull, smooth, threshold,
              watershed, extension, tolerance, object_size, plot = plot)
     }
   } else{
@@ -272,6 +324,9 @@ object_contour <- function(img,
       }
       dims <- sapply(contour, function(x){dim(x)[1]})
       contour <- contour[which(dims > mean(dims * 0.1))]
+      if(is.numeric(smooth) & smooth > 0){
+        contour <- poly_smooth(contour, niter = smooth, plot = FALSE) |> poly_close()
+      }
       if(isTRUE(plot)){
         if(isTRUE(center)){
           plot_polygon(contour)
@@ -288,15 +343,18 @@ object_contour <- function(img,
       plants <- list.files(pattern = pattern, diretorio_original)
       extensions <- as.character(sapply(plants, file_extension))
       names_plant <- as.character(sapply(plants, file_name))
-      if(length(grep(pattern, names_plant)) == 0){
-        stop(paste("Pattern '", pattern, "' not found in '",
-                   paste(getwd(), sub(".", "", diretorio_original), sep = ""), "'", sep = ""),
-             call. = FALSE)
-      }
-      if(!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))){
-        stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
+      if (length(grep(pattern, names_plant)) == 0) {
+        cli::cli_abort("Pattern {.val {pattern}} not found in directory {.path {file.path(getwd(), sub('.', '', diretorio_original))}}.")
       }
 
+      allowed_ext <- c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF")
+
+      if (!all(extensions %in% allowed_ext)) {
+        cli::cli_abort(c(
+          "!" = "Some image files have unsupported extensions.",
+          "i" = "Allowed extensions are: {.val {tolower(unique(allowed_ext))}}"
+        ))
+      }
 
       help_contour <- function(img){
         img <- image_import(img)
@@ -338,33 +396,53 @@ object_contour <- function(img,
 
 
       if(parallel == TRUE){
-        init_time <- Sys.time()
-        nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-        future::plan(future::multisession, workers = nworkers)
-        on.exit(future::plan(future::sequential))
-        `%dofut%` <- doFuture::`%dofuture%`
+        # decide number of workers
+        nworkers <- ifelse(is.null(workers),
+                           trunc(parallel::detectCores() * 0.5),
+                           workers)
 
-        if(verbose == TRUE){
-          message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
+        # start mirai daemons
+        mirai::daemons(nworkers)
+        on.exit(mirai::daemons(0), add = TRUE)
+
+        # CLI header + progress step
+        if (verbose) {
+          cli::cli_rule(
+            left  = cli::col_blue("Parallel processing using {.val {nworkers}} cores"),
+            right = cli::col_blue("Started on {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+          )
+          cli::cli_progress_step(
+            msg        = "Processing {.val {length(plants)}} images using {.val {nworkers}} cores...",
+            msg_done   = "Batch processing finished",
+            msg_failed = "Oops, something went wrong."
+          )
         }
-        results <-
-          foreach::foreach(i = seq_along(plants)) %dofut%{
-            help_contour(plants[[i]])
-          }
+
+        # run help_contour in parallel
+        results <- mirai::mirai_map(
+          .x = plants,
+          .f = help_contour
+        )[.progress]
+
 
       } else{
-
-        pb <- progress(max = length(plants), style = 4)
-        foo <- function(plants, ...){
-          run_progress(pb, ...)
-          help_contour(plants)
+        if(verbose){
+          cli::cli_rule(
+            left = cli::col_blue("Analyzing {.val {length(names_plant)}} images found on {.path {diretorio_original}}."),
+            right = cli::col_blue("Start on {.val {format(Sys.time(), format = '%Y-%m-%d - %H:%M:%OS0')}}")
+          )
+          cli::cli_progress_bar(
+            format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_current}/{cli::pb_total} [ETA:{cli::pb_eta}] | Current: {.val {cli::pb_status}}",
+            total = length(names_plant),
+            clear = FALSE
+          )
         }
-        results <-
-          lapply(seq_along(plants), function(i){
-            foo(plants[i],
-                actual = i,
-                text = paste("Processing image", names_plant[i]))
-          })
+        results <- list()
+        for (i in seq_along(plants)) {
+          cli::cli_progress_update(status = plants[i])
+          results[[i]] <- help_contour(img = plants[i])
+        }
+
 
       }
       names(results) <- plants
@@ -381,20 +459,41 @@ object_isolate <- function(img,
                            id = NULL,
                            parallel = FALSE,
                            workers = NULL,
+                           verbose = TRUE,
                            ...){
   if(inherits(img, "list")){
     if(!all(sapply(img, class) == "Image")){
-      stop("All images must be of class 'Image'")
+      cli::cli_abort("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
-      message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      foreach::foreach(i = seq_along(img)) %dofut%{
-        object_isolate(img[[i]], id)
+      # decide number of workers
+      nworkers <- ifelse(is.null(workers),
+                         trunc(parallel::detectCores() * 0.5),
+                         workers)
+
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
+
+      # CLI header + progress
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Isolating objects in {.val {length(img)}} images"),
+          right = cli::col_blue("Using {.val {nworkers}} workers")
+        )
+        cli::cli_progress_step(
+          msg        = "Processing images in parallel...",
+          msg_done   = "Object isolation complete.",
+          msg_failed = "Object isolation failed."
+        )
       }
+
+      # run object_isolate in parallel
+      results <- mirai::mirai_map(
+        .x = img,
+        .f = function(im){pliman::object_isolate(im, id)}
+      )[.progress]
+
     } else{
       lapply(img, object_isolate, id, ...)
     }
@@ -414,20 +513,40 @@ object_isolate <- function(img,
 object_id <- function(img,
                       parallel = FALSE,
                       workers = NULL,
+                      verbose = TRUE,
                       ...){
   if(inherits(img, "list")){
     if(!all(sapply(img, class) == "Image")){
-      stop("All images must be of class 'Image'")
+      cli::cli_abort("All images must be of class 'Image'")
     }
     if(parallel == TRUE){
-      nworkers <- ifelse(is.null(workers), trunc(parallel::detectCores()*.5), workers)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
-      message("Image processing using multiple sessions (",nworkers, "). Please wait.")
-      foreach::foreach(i = seq_along(img)) %dofut%{
-        object_id(img[[i]], ...)
+      # decide number of workers
+      nworkers <- if (is.null(workers)) trunc(parallel::detectCores() * 0.5) else workers
+
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
+
+      # CLI header + progress step
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Extracting object IDs from {.val {length(img)}} images"),
+          right = cli::col_blue("Using {.val {nworkers}} workers")
+        )
+        cli::cli_progress_step(
+          msg      = "Processing images in parallel...",
+          msg_done = "Object ID extraction complete.",
+          msg_failed = "Object ID extraction failed."
+        )
       }
+
+      # run object_id in parallel
+      results <- mirai::mirai_map(
+        .x = img,
+        .f = function(im) {
+          pliman::object_id(im, ...)
+        }
+      )[.progress]
     } else{
       lapply(img, object_id, ...)
     }
@@ -551,7 +670,7 @@ object_split <- function(img,
 #' Augment Images
 #'
 #' This function takes an image and augments it by rotating it multiple times.
-#'
+#' @inheritParams analyze_objects
 #' @param img An `Image` object.
 #' @param pattern A regular expression pattern to select multiple images from a
 #'   directory.
@@ -582,7 +701,8 @@ image_augment <- function(img,
                           dir_original = NULL,
                           dir_processed = NULL,
                           parallel = FALSE,
-                          verbose = TRUE){
+                          verbose = TRUE,
+                          workers = NULL){
   if(is.null(dir_original)){
     diretorio_original <- paste0("./")
   } else{
@@ -649,61 +769,87 @@ image_augment <- function(img,
     plants <- list.files(pattern = pattern, diretorio_original)
     extensions <- as.character(sapply(plants, file_extension))
     names_plant <- as.character(sapply(plants, file_name))
-    if(length(grep(pattern, names_plant)) == 0){
-      stop(paste("Pattern '", pattern, "' not found in '",
-                 paste(getwd(), sub(".", "", diretorio_original), sep = ""), "'", sep = ""),
-           call. = FALSE)
+    if (length(grep(pattern, names_plant)) == 0) {
+      cli::cli_abort(c(
+        "!" = "Pattern {.val {pattern}} not found.",
+        "x" = "Not found in directory {.path {file.path(getwd(), sub('^\\.', '', diretorio_original))}}."
+      ))
     }
-    if(!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))){
-      stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
+
+    if (!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))) {
+      cli::cli_abort("Allowed extensions are: {.val .png}, {.val .jpeg}, {.val .jpg}, {.val .tiff}")
     }
+
 
     if(isTRUE(parallel)){
 
-      init_time <- Sys.time()
-      nworkers <- trunc(parallel::detectCores()*.3)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
-
-      if(verbose == TRUE){
-        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
+      # 1. make sure the output directory exists
+      if (!dir.exists(diretorio_processada)) {
+        dir.create(diretorio_processada, recursive = TRUE)
       }
-      obj_list <- list()
-      results <-
-        foreach::foreach(i = seq_along(plants)) %dofut%{
 
-          tmpimg <- image_import(plants[[i]], path = diretorio_original)
+      # decide number of workers
+      nworkers <- if (is.null(workers)) trunc(parallel::detectCores() * 0.3) else workers
 
-          angles <- seq(0, 360, by = 360 / times)
-          angles <- angles[-length(angles)]
-          for(j in 1:times){
-            top <- tmpimg@.Data[1:10,,]
-            bottom <- tmpimg@.Data[(nrow(tmpimg)-10):nrow(tmpimg),,]
-            left <- tmpimg@.Data[,1:10,]
-            right <- tmpimg@.Data[,(ncol(tmpimg) - 10):ncol(tmpimg),]
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
 
-            rval <- mean(c(c(top[,,1]), c(bottom[,,1]), c(left[,,1]), c(right[,,1])))
-            gval <- mean(c(c(top[,,2]), c(bottom[,,2]), c(left[,,2]), c(right[,,2])))
-            bval <- mean(c(c(top[,,3]), c(bottom[,,3]), c(left[,,3]), c(right[,,3])))
 
-            tmp <- EBImage::rotate(tmpimg, angles[j], bg.col = rgb(rval, gval, bval))
+      # CLI header + progress
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Augmenting {.val {length(plants)}} images"),
+          right = cli::col_blue("Using {.val {nworkers}} workers")
+        )
+        cli::cli_progress_step(
+          msg        = "Dispatching rotation tasks...",
+          msg_done   = "All images processed.",
+          msg_failed = "Something went wrong."
+        )
+      }
 
-            if(type == "export"){
-              image_export(tmp,
-                           name = paste0(file_name(plants[[j]]), "_", sub("\\.", "-", round(angles[j], 2)), ".jpg"),
-                           subfolder = diretorio_processada)
-            } else{
-              obj_list[[paste0(file_name(plants[[j]]), "_", sub("\\.", "-", round(angles[j], 2)), ".jpg")]] <- tmp
+      # run in parallel
+      mirai::mirai_map(
+        .x = plants,
+        .f = function(path) {
+          tmpimg <- pliman::image_import(path, path = diretorio_original)
+          angles <- seq(0, 360, length.out = times + 1)[- (times + 1)]
+
+          for (ang in angles) {
+            # compute background colour
+            frame  <- tmpimg@.Data
+            border <- c(
+              c(frame[1:10,,1]),   c(frame[(nrow(tmpimg)-9):nrow(tmpimg),,1]),
+              c(frame[,1:10,1]),   c(frame[,(ncol(tmpimg)-9):ncol(tmpimg),1])
+            )
+            rval <- mean(border)
+            # same for G/B...
+            gval <- mean(c(frame[1:10,,2], frame[(nrow(tmpimg)-9):nrow(tmpimg),,2],
+                           frame[,1:10,2], frame[,(ncol(tmpimg)-9):ncol(tmpimg),2]))
+            bval <- mean(c(frame[1:10,,3], frame[(nrow(tmpimg)-9):nrow(tmpimg),,3],
+                           frame[,1:10,3], frame[,(ncol(tmpimg)-9):ncol(tmpimg),3]))
+
+            rotated <- EBImage::rotate(tmpimg, ang, bg.col = grDevices::rgb(rval, gval, bval))
+
+            if (type == "export") {
+              # build a full file path
+              fname <- file.path(
+                diretorio_processada,
+                paste0(pliman::file_name(path), "_", sub("\\.", "-", round(ang, 2)), ".jpg")
+              )
+              # write it out
+              pliman::image_export(rotated, name = fname, subfolder = NULL)
+            } else {
+              # return objects if needed
+              NULL
             }
-
-
-
           }
-        }
 
-      message("Done!")
-      message("Elapsed time: ", sec_to_hms(as.numeric(difftime(Sys.time(),  init_time, units = "secs"))))
+          NULL
+        }
+      )[.progress]
+
 
     } else{
       obj_list <- list()
@@ -814,6 +960,7 @@ object_export <- function(img,
                           edge = 20,
                           remove_bg = FALSE,
                           parallel = FALSE,
+                          workers = NULL,
                           verbose = TRUE){
   if(is.null(pattern)){
     list_objects <- object_split(img = img,
@@ -888,91 +1035,126 @@ object_export <- function(img,
     plants <- list.files(pattern = pattern, diretorio_original)
     extensions <- as.character(sapply(plants, file_extension))
     names_plant <- as.character(sapply(plants, file_name))
-    if(length(grep(pattern, names_plant)) == 0){
-      stop(paste("Pattern '", pattern, "' not found in '",
-                 paste(getwd(), sub(".", "", diretorio_original), sep = ""), "'", sep = ""),
-           call. = FALSE)
+    if (length(grep(pattern, names_plant)) == 0) {
+      cli::cli_abort(c(
+        "!" = "Pattern {.val {pattern}} not found.",
+        "x" = "Not found in directory {.path {file.path(getwd(), sub('^\\.', '', diretorio_original))}}."
+      ))
     }
-    if(!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))){
-      stop("Allowed extensions are .png, .jpeg, .jpg, .tiff")
+
+    if (!all(extensions %in% c("png", "jpeg", "jpg", "tiff", "PNG", "JPEG", "JPG", "TIFF"))) {
+      cli::cli_abort("Allowed extensions are: {.val .png}, {.val .jpeg}, {.val .jpg}, {.val .tiff}")
     }
+
 
     if(isTRUE(parallel)){
 
-      init_time <- Sys.time()
-      nworkers <- trunc(parallel::detectCores()*.3)
-      future::plan(future::multisession, workers = nworkers)
-      on.exit(future::plan(future::sequential))
-      `%dofut%` <- doFuture::`%dofuture%`
-
-      if(verbose == TRUE){
-        message("Processing ", length(names_plant), " images in multiple sessions (",nworkers, "). Please, wait.")
+      # ensure output dir exists up front
+      if (!dir.exists(diretorio_processada)) {
+        dir.create(diretorio_processada, recursive = TRUE)
       }
 
-      results <-
-        foreach::foreach(i = seq_along(plants)) %dofut%{
+      # decide number of workers
+      nworkers <- if (is.null(workers)) trunc(parallel::detectCores() * 0.3) else workers
 
-          tmpimg <- image_import(plants[[i]], path = diretorio_original)
+      # start mirai daemons
+      mirai::daemons(nworkers)
+      on.exit(mirai::daemons(0), add = TRUE)
 
-          list_objects <- object_split(img = tmpimg,
-                                       index = index,
-                                       lower_size = lower_size,
-                                       watershed = watershed,
-                                       invert = invert,
-                                       fill_hull = fill_hull,
-                                       opening = opening,
-                                       closing = closing,
-                                       filter = filter,
-                                       threshold = threshold,
-                                       extension = extension,
-                                       tolerance = tolerance,
-                                       object_size = object_size,
-                                       edge = edge,
-                                       remove_bg = remove_bg,
-                                       verbose = FALSE,
-                                       plot = FALSE)
-          names(list_objects) <-  paste0(leading_zeros(as.numeric(names(list_objects)), n = 4), ".jpg")
+      # CLI header + progress step
+      if (verbose) {
+        cli::cli_rule(
+          left  = cli::col_blue("Augmenting and exporting {.val {length(plants)}} objects"),
+          right = cli::col_blue("Started at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+        )
+        cli::cli_progress_step(
+          msg        = "Dispatching {.val {length(plants)}} image tasks...",
+          msg_done   = "All batches finished.",
+          msg_failed = "Batch processing failed."
+        )
+      }
 
-          if(isTRUE(augment)){
-            bb <-
-              lapply(seq_along(list_objects), function(x){
-                image_augment(list_objects[[x]], type = "return", times = times)
-              })
-            names(bb) <- names(list_objects)
-            unlisted <- do.call(c, bb)
-            names(unlisted) <- sub("\\.", "_", names(unlisted))
-            list_objects <- unlisted
-            names(list_objects) <- sub("jpg.", "", names(list_objects))
-          }
+      # run in parallel
+      mirai::mirai_map(
+        .x = plants,
+        .f = function(path) {
+          tmpimg <- pliman::image_import(path, path = diretorio_original)
 
-          a <- lapply(seq_along(list_objects), function(j){
-            tmp <- list_objects[[j]]
-            if(isTRUE(squarize)){
-              try(
-                tmp <- image_square(tmp,
-                                    plot = FALSE,
-                                    sample_left = 5,
-                                    sample_top = 5,
-                                    sample_right = 5,
-                                    sample_bottom = 5),
-                silent = TRUE
-              )
-
-            }
-            image_export(tmp,
-                         name = paste0(file_name(plants[[i]]), "_", names(list_objects[j])),
-                         subfolder = diretorio_processada)
-          }
+          # split into objects
+          list_objects <- object_split(
+            img         = tmpimg,
+            index       = index,
+            lower_size  = lower_size,
+            watershed   = watershed,
+            invert      = invert,
+            fill_hull   = fill_hull,
+            opening     = opening,
+            closing     = closing,
+            filter      = filter,
+            threshold   = threshold,
+            extension   = extension,
+            tolerance   = tolerance,
+            object_size = object_size,
+            edge        = edge,
+            remove_bg   = remove_bg,
+            verbose     = FALSE,
+            plot        = FALSE
           )
-        }
+          names(list_objects) <- paste0(
+            leading_zeros(as.numeric(names(list_objects)), n = 4),
+            ".jpg"
+          )
 
-      message("Done!")
-      message("Elapsed time: ", sec_to_hms(as.numeric(difftime(Sys.time(),  init_time, units = "secs"))))
+          # optional augmentation
+          if (isTRUE(augment)) {
+            list_objects <- unlist(lapply(names(list_objects), function(nm) {
+              imgs <- image_augment(list_objects[[nm]], type = "return", times = times)
+              setNames(imgs, sub("\\.", "_", names(imgs)))
+            }), recursive = FALSE)
+            names(list_objects) <- sub("\\.jpg$", "", names(list_objects))
+          }
+          return(list_objects)
+          # export each object to an absolute path
+          for (nm in names(list_objects)) {
+            obj <- list_objects[[nm]]
+            if (isTRUE(squarize)) {
+              obj <- try(
+                image_square(obj, plot = FALSE,
+                             sample_left   = 5,
+                             sample_top    = 5,
+                             sample_right  = 5,
+                             sample_bottom = 5),
+                silent = TRUE
+              ) %||% obj
+            }
+            out_file <- file.path(
+              diretorio_processada,
+              paste0(file_name(path), "_", nm, format)
+            )
+            pliman::image_export(
+              obj,
+              name      = out_file,
+              subfolder = NULL
+            )
+          }
+
+          NULL
+        }
+      )[.progress]
 
     } else{
-
+      cli::cli_rule(
+        left  = cli::col_blue("Augmenting and exporting {.val {length(plants)}} objects"),
+        right = cli::col_blue("Started at {.val {format(Sys.time(), '%Y-%m-%d | %H:%M:%OS0')}}")
+      )
+      cli::cli_progress_bar(
+        format = "{cli::pb_spin} {cli::pb_bar} {cli::pb_current}/{cli::pb_total} | ETA: {cli::pb_eta}",
+        total = length(names_plant),
+        clear = FALSE
+      )
       for(i in seq_along(plants)){
         tmpimg <- image_import(plants[[i]], path = diretorio_original)
+        cli::cli_progress_update()
 
         list_objects <- object_split(img = tmpimg,
                                      index = index,
@@ -1086,6 +1268,12 @@ object_rgb <- function(img, labels){
 #' @inheritParams image_binary
 #' @param color The color to apply in the image objects. Defaults to `"blue"`.
 #' @param plot Plots the modified image? Defaults to `TRUE`.
+#' @param pick_palettes  Logical argument indicating wheater the user needs to
+#'   pick up the color palettes for foreground and background for the image. If
+#'   `TRUE` [pick_palette()] will be called internally so that the user can sample
+#'   color points representing foreground and background.
+#'@param foreground,background A color palette for the foregrond and background,
+#'  respectively (optional).
 #' @param ... Additional arguments passed on to [image_binary()].
 #'
 #' @return An object of class `Image`
@@ -1100,13 +1288,82 @@ object_rgb <- function(img, labels){
 #' }
 #'
 object_to_color <- function(img,
+                            pick_palettes = FALSE,
+                            background = NULL,
+                            foreground = NULL,
                             index = "NB",
                             color = "blue",
                             plot = TRUE,
                             ...){
-  bin <- help_binary(img,
-                     index = index,
-                     ...)
+  if(isTRUE(pick_palettes) || (!is.null(background) & !is.null(foreground))){
+    if(interactive()){
+      plot(img)
+      if(is.null(background) && is.null(foreground)){
+        cli::cli_inform("Use the first mouse button to pick up BACKGROUND colors. Press {.kbd Esc} to exit.")
+
+        back <- pick_palette(img,
+                             r = 5,
+                             verbose = FALSE,
+                             palette  = FALSE,
+                             plot = FALSE,
+                             col = "blue",
+                             external_device = FALSE,
+                             title = "Use the first mouse button to pick up BACKGROUND colors. Click 'Done' to finish",
+                             viewer = "base")
+      } else{
+        back <- background
+      }
+      if(is.null(background) && is.null(foreground)){
+        cli::cli_inform("Use the first mouse button to pick up FOREGROUND colors. Press {.kbd Esc} to exit.")
+
+        fore <- pick_palette(img,
+                             r = 5,
+                             verbose = FALSE,
+                             palette  = FALSE,
+                             plot = FALSE,
+                             col = "salmon",
+                             external_device = FALSE,
+                             title = "Use the first mouse button to pick up FOREGROUND colors. Click 'Done' to finish",
+                             viewer = "base")
+      } else{
+        fore <- foreground
+      }
+
+      original <-
+        data.frame(CODE = "img",
+                   R = c(img@.Data[,,1]),
+                   G = c(img@.Data[,,2]),
+                   B = c(img@.Data[,,3]))
+      foreground <-
+        data.frame(CODE = "foreground",
+                   R = c(fore@.Data[,,1]),
+                   G = c(fore@.Data[,,2]),
+                   B = c(fore@.Data[,,3]))
+      background <-
+        data.frame(CODE = "background",
+                   R = c(back@.Data[,,1]),
+                   G = c(back@.Data[,,2]),
+                   B = c(back@.Data[,,3]))
+      back_fore <-
+        transform(rbind(foreground[sample(1:nrow(foreground)),][1:2000,],
+                        background[sample(1:nrow(background)),][1:2000,]),
+                  Y = ifelse(CODE == "background", 0, 1))
+
+      formula <- as.formula(paste("Y ~ ", "R+G+B"))
+
+      modelo1 <- suppressWarnings(glm(formula,
+                                      family = binomial("logit"),
+                                      data = back_fore))
+      pred1 <- round(predict(modelo1, newdata = original, type="response"), 0)
+      bin <- EBImage::Image(matrix(pred1, ncol = dim(img)[[2]]))
+
+    }
+  } else{
+    bin <- help_binary(img,
+                       index = index,
+                       ...)
+  }
+
   pix_ref <- which(bin == 1)
   colto <- col2rgb(color) / 255
   img@.Data[,,1][pix_ref] <- colto[1]
@@ -1117,3 +1374,79 @@ object_to_color <- function(img,
   }
   invisible(img)
 }
+
+#' Compute Bounding Boxes from Contours
+#'
+#' This function calculates the bounding boxes for a given list of contours.
+#'
+#' @param contours A list of matrices, where each matrix contains two columns
+#'   representing (x, y) coordinates of a contour.
+#'
+#' @return A list of bounding boxes, where each bounding box is represented as a
+#'   list with `x_min`, `y_min`, `x_max`, and `y_max` values.
+#'
+#' @examples
+#' if(interactive()){
+#' contours <- list(
+#'   matrix(c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+#'            110, 120, 130, 140, 150, 160, 170, 180, 190, 200),
+#'          ncol = 2, byrow = FALSE)
+#' )
+#' bbox_list <- object_bbox(contours)
+#' print(bbox_list)
+#' }
+#'
+#' @export
+object_bbox <- function(contours) {
+  # Ensure contours is a list
+  if (!is.list(contours)) {
+    cli::cli_abort("contours must be a list of coordinate matrices")
+  }
+  bbox_list <- lapply(contours, function(coords) {
+    list(
+      x_min = min(coords[, 1]),
+      y_min = min(coords[, 2]),
+      x_max = max(coords[, 1]),
+      y_max = max(coords[, 2])
+    )
+  })
+  return(bbox_list)
+}
+
+#' Add Bounding Boxes to an Existing Plot
+#'
+#' This function overlays bounding boxes onto an existing plot.
+#'
+#' @param bbox_list A list of bounding boxes, as returned by `object_bbox()`.
+#' @param col The color for the bounding boxes. Defaults to `"red"`.
+#' @return None (adds bounding boxes to an existing plot).
+#'
+#' @examples
+#' if(interactive()){
+#' plot(NA,
+#'     xlim = c(0, 200),
+#'     ylim = c(0, 200),
+#'     asp = 1)
+#' contours <- list(
+#'   matrix(c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+#'            110, 120, 130, 140, 150, 160, 170, 180, 190, 200),
+#'          ncol = 2, byrow = FALSE)
+#' )
+#' bbox_list <- object_bbox(contours)
+#' plot_bbox(bbox_list)
+#' }
+#'
+#' @export
+plot_bbox <- function(bbox_list, col = "red") {
+  if(is.matrix(bbox_list[[1]])){
+    bbox_list <- object_bbox(bbox_list)
+  }
+  if (!is.list(bbox_list) || length(bbox_list) == 0) {
+    cli::cli_abort("bbox_list must be a non-empty list of bounding boxes.")
+  }
+  for (bbox in bbox_list) {
+    rect(bbox$x_min, bbox$y_min, bbox$x_max, bbox$y_max, border = col, lwd = 1)
+  }
+}
+
+

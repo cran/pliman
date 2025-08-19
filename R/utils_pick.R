@@ -30,6 +30,10 @@
 #'   [set_pliman_viewer()] function. For example, you can run
 #'   `set_pliman_viewer("mapview")` to set the viewer option to "mapview" for
 #'   all functions.
+#' @param external_device Logical. If `TRUE` (default), opens an external
+#' graphics window when running inside RStudio to ensure accurate point
+#' selection using [locator()]. Ignored when not in RStudio or when using
+#' \code{viewer = "mapview"}.
 #' @param title The title of the map view when `viewer`is used.
 #' @param show How to plot in mapview viewer, either `'rgb` or `'index'`.
 #' @param index The index to use for the index view. Defaults to 'B'.
@@ -45,6 +49,7 @@
 #' * `pick_rgb()` returns a `data.frame` with the R, G, and B values of the
 #' selected point(s).
 #' * `pick_palette()` returns an object of class `Image`.
+#' @importFrom grDevices dev.cur dev.set dev.new
 #' @name utils_pick
 #' @export
 #' @author Tiago Olivoto \email{tiagoolivoto@gmail.com}
@@ -67,6 +72,7 @@ pick_count <- function(img,
                        n = Inf,
                        col = "red",
                        viewer = get_pliman_viewer(),
+                       external_device = FALSE,
                        size = 0.8,
                        plot = TRUE,
                        verbose = TRUE){
@@ -74,12 +80,39 @@ pick_count <- function(img,
   vieweropt <- vieweropt[pmatch(viewer[1], vieweropt)]
   if (isTRUE(interactive())) {
     if(vieweropt == "base"){
+      # Handle external device logic
+      is_rstudio <- Sys.getenv("RSTUDIO") == "1"
+      os <- .Platform$OS.type
+      original_device <- dev.cur()
+      new_device <- FALSE
+
+      if (is_rstudio && isTRUE(external_device)) {
+        if (verbose) {
+          cli::cli_inform("Opening external graphics window for accurate {.fn locator}() use.")
+        }
+
+        new_device <- TRUE
+        dev.new(noRStudioGD = TRUE)
+      }
+
+      on.exit({
+        # Close and restore device
+        if (new_device) {
+          dev.off()
+          dev.set(original_device)
+        }
+      })
+
       if (isTRUE(plot)) {
         plot(img)
       }
       on.exit(invisible(length(x)))
       if(isTRUE(verbose)){
-        message("Use the first mouse button to pick up points in the plot.\nPress Esc to exit.")
+        cli::cli_inform(c(
+          "i" = "Use the first mouse button to pick up points in the plot.",
+          "i" = "Press {.kbd Esc} to exit."
+        ))
+
       }
       x <- y <- NULL
       i <- 1
@@ -96,7 +129,7 @@ pick_count <- function(img,
       }
       cat("\n")
       if (i >= n) {
-        warning("Maximum number of count achieved. Please, increase the argument `n`.", call. = FALSE)
+        cli::cli_warn("Maximum number of count achieved. Please, increase the argument {.arg n}.")
       }
     } else {
       points <- mv_points(img, title = "Use the 'Draw Marker' tool to pick up points in the plot")
@@ -111,18 +144,48 @@ pick_coords <- function(img,
                         n = Inf,
                         col = "red",
                         viewer = get_pliman_viewer(),
+                        external_device = FALSE,
                         size = 0.8,
-                        verbose = TRUE){
+                        verbose = TRUE) {
+
   vieweropt <- c("base", "mapview")
   vieweropt <- vieweropt[pmatch(viewer[1], vieweropt)]
+
   if (isTRUE(interactive())) {
     pixels <- NULL
-    if(vieweropt == "base"){
-      plot(img)
-      on.exit(invisible(data.frame(x = x, y = y)))
-      if(isTRUE(verbose)){
-        message("Use the first mouse button to pick up points in the plot.\nPress Esc to exit.")
+
+    if (vieweropt == "base") {
+      # Handle external device logic
+      is_rstudio <- Sys.getenv("RSTUDIO") == "1"
+      os <- .Platform$OS.type
+      original_device <- dev.cur()
+      new_device <- FALSE
+
+      if (is_rstudio && isTRUE(external_device)) {
+        if (isTRUE(verbose)) {
+          cli::cli_inform("Opening external graphics window for accurate {.fn locator}() input...")
+        }
+        new_device <- TRUE
+        dev.new(noRStudioGD = TRUE)
       }
+
+      on.exit({
+        # Close and restore device
+        if (new_device) {
+          dev.off()
+          dev.set(original_device)
+        }
+      })
+
+      plot(img)
+
+      if (isTRUE(verbose)) {
+        cli::cli_inform(c(
+          "i" = "Use the first mouse button to pick up points in the plot.",
+          "i" = "Press {.kbd Esc} to exit."
+        ))
+      }
+
 
       x <- y <- NULL
       i <- 1
@@ -136,15 +199,21 @@ pick_coords <- function(img,
         points(x, y, type = "p", col = col, cex = size, pch = 19)
         i <- i + 1
       }
+
       if (i >= n) {
-        warning("Maximum number of count achieved. Please, increase the argument `n`.", call. = FALSE)
+        cli::cli_warn("Maximum number of points reached. Please, increase the argument {.arg n}.")
       }
-    } else{
+
+      return(invisible(data.frame(x = x, y = y)))
+
+    } else {
+      # mapview interface
       points <- mv_points(img, title = "Use the 'Draw Marker' tool to pick up points in the plot")
-      invisible(points)
+      return(invisible(points))
     }
   }
 }
+
 
 #' @name utils_pick
 #' @export
@@ -152,6 +221,7 @@ pick_rgb <- function(img,
                      n = Inf,
                      col = "red",
                      viewer = get_pliman_viewer(),
+                     external_device = FALSE,
                      size = 0.8,
                      plot = TRUE,
                      verbose = TRUE){
@@ -160,12 +230,37 @@ pick_rgb <- function(img,
   if (isTRUE(interactive())) {
     pixels <- NULL
     if(vieweropt == "base"){
+      # Handle external device logic
+      is_rstudio <- Sys.getenv("RSTUDIO") == "1"
+      os <- .Platform$OS.type
+      original_device <- dev.cur()
+      new_device <- FALSE
+
+      if (is_rstudio && isTRUE(external_device)) {
+        if (isTRUE(verbose)) {
+          cli::cli_inform("Opening external graphics window for accurate {.fn locator}() input...")
+        }
+
+        new_device <- TRUE
+        dev.new(noRStudioGD = TRUE)
+      }
+
+      on.exit({
+        # Close and restore device
+        if (new_device) {
+          dev.off()
+          dev.set(original_device)
+        }
+      })
       if (isTRUE(plot)) {
         plot(img)
       }
       on.exit(invisible(pixels))
       if(isTRUE(verbose)){
-        message("Use the first mouse button to pick up points in the plot.\nPress Esc to exit.")
+        cli::cli_inform(c(
+          "i" = "Use the first mouse button to pick up points in the plot.",
+          "i" = "Press {.kbd Esc} to exit."
+        ))
       }
 
       x <- y <- NULL
@@ -187,7 +282,7 @@ pick_rgb <- function(img,
       pixels <- data.frame(pixels)
 
       if (i >= n) {
-        warning("Maximum number of count achieved. Please, increase the argument `n`.", call. = FALSE)
+        cli::cli_warn("Maximum number of count achieved. Please, increase the argument {.arg n}.")
       }
     } else{
       points <- mv_points(img, title = "Use the 'Draw Marker' tool to pick up points in the plot")
@@ -209,9 +304,10 @@ pick_rgb <- function(img,
 #' @export
 pick_palette <- function(img,
                          n = Inf,
-                         r = 1,
+                         r = 2,
                          shape = "box",
                          viewer = get_pliman_viewer(),
+                         external_device = FALSE,
                          show = "rgb",
                          title = "Pick colors in the image",
                          index =  "B",
@@ -227,12 +323,38 @@ pick_palette <- function(img,
   vieweropt <- vieweropt[pmatch(viewer[1], vieweropt)]
   if (isTRUE(interactive())) {
     if(vieweropt == "base"){
+      # Handle external device logic
+      is_rstudio <- Sys.getenv("RSTUDIO") == "1"
+      os <- .Platform$OS.type
+      original_device <- dev.cur()
+      new_device <- FALSE
+
+      if (is_rstudio && isTRUE(external_device)) {
+        if (isTRUE(verbose)) {
+          cli::cli_inform("Opening external graphics window for accurate {.fn locator} input...")
+        }
+
+        new_device <- TRUE
+        dev.new(noRStudioGD = TRUE)
+      }
+
+      on.exit({
+        # Close and restore device
+        if (new_device) {
+          dev.off()
+          dev.set(original_device)
+        }
+      })
 
       if (isTRUE(plot)) {
         plot(img)
       }
       if(isTRUE(verbose)){
-        message("Use the first mouse button to pick up points in the plot.\nPress Esc to exit.")
+        cli::cli_inform(c(
+          "i" = "Use the first mouse button to pick up points in the plot.",
+          "i" = "Press {.kbd Esc} to exit."
+        ))
+
       }
       bind <- NULL
       i <- 1
@@ -258,7 +380,7 @@ pick_palette <- function(img,
         i <- i + 1
       }
       if(i == 1){
-        stop("Process interrupted", call. = FALSE)
+        cli::cli_abort("Process interrupted.")
       }
       if(i > 1){
         on.exit(invisible(pal))
