@@ -1,3 +1,10 @@
+# pliman 3.1.1
+## New Functions
+* New `object_scatter()` function to plot object thumbnails at x-y coordinates derived from image features
+
+## Minor Improvements
+Include morphologic operation when `foreground` and `background` arguments are used in `analyze_objects()`.
+
 # pliman 3.1.0
 ## New Functions
 * New functions for geometric operation on shapefiles.

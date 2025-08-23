@@ -1,6 +1,6 @@
 Package: pliman
 Title: Tools for Plant Image Analysis
-Version: 3.1.0
+Version: 3.1.1
 Authors@R: 
     person("Tiago", "Olivoto", , "tiagoolivoto@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0241-9636"))
@@ -32,9 +32,9 @@ Language: en-US
 LazyData: true
 RoxygenNote: 7.3.2
 NeedsCompilation: yes
-Packaged: 2025-08-19 19:45:52 UTC; tiago
+Packaged: 2025-08-23 20:39:56 UTC; tiago
 Author: Tiago Olivoto [aut, cre] (ORCID:
     <https://orcid.org/0000-0002-0241-9636>)
 Maintainer: Tiago Olivoto <tiagoolivoto@gmail.com>
 Repository: CRAN
-Date/Publication: 2025-08-19 20:10:02 UTC
+Date/Publication: 2025-08-23 23:10:02 UTC

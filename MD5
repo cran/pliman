@@ -1,8 +1,8 @@
-48e1ffbea28f72aad0debc1f506da2a4 *DESCRIPTION
-f40d3b5dc6e91dbfc2a221571508ea50 *NAMESPACE
-02e2bd1a0e577d0187d10a2f22c0ff33 *NEWS.md
+a46357f1860ebad700873d37ea2420c6 *DESCRIPTION
+76a38c33c981a5d6d9de236b1c7d4bc6 *NAMESPACE
+9541e4ff81a85f263605ff49f16b2c49 *NEWS.md
 37b40670bb86de211122b9646093a49b *R/RcppExports.R
-0ed038c7dd6d9d5f0ae272d34940bb68 *R/analyze_objects.R
+cb74930ff0a0ec9b5001c47cc53fad35 *R/analyze_objects.R
 05c1c994ef02dcc253a23dbea053d280 *R/analyze_objects_minimal.R
 5b880d3f0b7c8d22497435c9d6b28366 *R/apply_fun_to_imgs.R
 0925cacc1f9a6ff3f1428c663238e45e *R/edge.R
@@ -11,7 +11,7 @@ d9445b49aca7bc17229776b254dc5137 *R/measure_disease_byl.R
 0934df729e01b630560ecb658a35d653 *R/measure_injury.R
 28dec72131b6774b43c73173e511f37c *R/pliman-package.R
 9ae534ce5b8a6078dfcb479a57269de1 *R/sad.R
-9f32eefc13e0f19e6702d894273e1799 *R/utilities.R
+34296c7d03d50b0f8fcc03f1764c9b20 *R/utilities.R
 bcb6de39aff0a4ad934dc6d1a05d4abf *R/utils_efourier.R
 59941619b35b64875aea14c36bce2335 *R/utils_file.R
 9061e3bad5a4c3aaf14a9af601474a8f *R/utils_imagem.R
@@ -21,7 +21,7 @@ b8a31846f2dc7cd115bb17d75170d117 *R/utils_mapedit.R
 fed5aaad185196f4ca2eac8407399465 *R/utils_mask.R
 313da87e419c7593c2535ef119aa569f *R/utils_measures.R
 74b98460eea99b3406f0a4fcb2e6dd2f *R/utils_mosaic.R
-db44b3db489af6ec0722a9284310b7ad *R/utils_objects.R
+17a126decd79a4bb3953a185af1dae33 *R/utils_objects.R
 fdbf6d6be9639aa13a5fcd33aa4aef88 *R/utils_pick.R
 1ab3cab8d99a3e684f634e6fa10ae52e *R/utils_pipe.R
 ff0434f8c142e4915c25f87e114d32f4 *R/utils_polygon.R
@@ -68,6 +68,7 @@ e1d6a9eb4474112f7c1c6abe68cb911c *man/analyze_objects_minimal.Rd
 37e93bea5b7bf81410c3179ef47a9cac *man/as_image.Rd
 c2c8e4401cc016ffc71bd58425f78336 *man/calibrate.Rd
 ff84b3383346f1814f85d3e1010f8238 *man/ccc.Rd
+f9254a0716a5e7eea8c2d95bf1152225 *man/clear_pliman_cache.Rd
 0f475f5c99083804b8efa50a41ce8325 *man/contours.Rd
 dadc9fb1b03abbf6526c30364264bba1 *man/custom_palette.Rd
 cb119fc80d9fe61fb27fa3dee4eea25e *man/dist_transform.Rd
@@ -156,6 +157,7 @@ cebd400cf6d3896cad0724dd7d57d820 *man/object_export_shp.Rd
 66ab7bbc6e5b9784682b517079f50ee2 *man/object_map.Rd
 4b476fe5868fee6a528fbb4d1f0f51b5 *man/object_mark.Rd
 e1194739d027124e35774c403047ad79 *man/object_rgb.Rd
+985483332f93bb7f7e29839ed4e6c2a7 *man/object_scatter.Rd
 a537aaf44061de74ffabacc71c29b015 *man/object_split.Rd
 1ac51bde27e109823385fe4722f1e0f0 *man/object_split_shp.Rd
 3d43c7af17a44051fedbe9664168b2fe *man/object_to_color.Rd
@@ -209,8 +211,8 @@ cabcac79b43125b94de7dedd15c2ba7c *man/utils_transform.Rd
 540555f584d6e38452c20e8acb604086 *man/utils_wd.Rd
 deeb1fd7fd3be912c39758c69c704046 *man/uuid.Rd
 87d1c7499c34fab3ce28240df997bb0b *man/watershed2.Rd
-a812c72d4ad8103af2879e50dc1c92bb *src/Makevars
-a812c72d4ad8103af2879e50dc1c92bb *src/Makevars.win
+85b0f34e09e24720903cfd0c0fd1627f *src/Makevars
+ec692489897a693af589618d8e7fd373 *src/Makevars.win
 a3f67fd01cc17298c9f7ead837f41aeb *src/RcppExports.cpp
 c832470d603637c697e53727d572363e *src/adsf.c
 04d9b15fe5b617010459b140b9342596 *src/adsf.h
